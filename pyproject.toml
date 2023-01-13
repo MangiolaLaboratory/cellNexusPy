@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "hcaquery"
+version = "0.0.1"
+description = "Provides access to a copy of the Human Cell Atlas, but with harmonised metdata. This allows for uniform querying across numerous datasets within the Atlas using common fields such as cell type, tissue type, and patient ethnicity. Usage involves first querying the metadata table for cells of interest, and then downloading the corresponding cells into a anndata object."
+authors = ["Stefano Mangiola <mangiolastefano@gmail.com>"]
+license = "GPL-3"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+anndata = "^0.8.0"
+pandas = "^1.5.2"
+tqdm = "^4.64.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

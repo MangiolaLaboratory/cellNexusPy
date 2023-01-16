@@ -35,14 +35,15 @@ def sync_remote_file(full_url, output_file):
 			os.makedirs(output_dir)
 		print("Downloading {url} to {outfile}".format(url=full_url, outfile=output_file))
 
+		#TODO: produce warning if file isn't found (but don't stop)
 		try:
 			import urllib.request
+			r = urllib.request.urlopen(full_url)
 			urllib.request.urlretrieve(full_url, output_file, show_progress)
 
 		except Exception as e:
 			print("File {url} could not be downloaded.".format(url=full_url))
 			print(e)
-		finally:
 			os.remove(output_file)
 
 # function to get metadata
@@ -56,13 +57,21 @@ def get_metadata(repository="https://harmonised-human-atlas.s3.amazonaws.com/met
 
 	return con
 
-#TODO
 def sync_assay_files(url = REMOTE_URL, cache_dir = get_default_cache_dir(), subdirs = [], files = []):
 
-	grid = list(itertools.product(["assays.h5", "se.rds"], files, subdirs))
-	urls = ["path=" + item[2] + "/" + item[1] + "&files=" + item[0] for item in grid]
+	urls = ["{baseurl}?path=%2F{subdir}%2F{assay}&files={filename}".format(baseurl=url, subdir=sdir, assay=ifile, filename=filename) 
+		for sdir, ifile, filename in itertools.product(subdirs, files, ["assays.h5", "se.rds"])]
 	
-	return urls
+	output_filepaths = [os.path.join(cache_dir, sdir, ifile, filename) 
+		for sdir, ifile, filename in itertools.product(subdirs, files, ["assays.h5", "se.rds"])]
+
+	for urli,fpathi in zip(urls,output_filepaths): 
+		if os.path.isfile(fpathi):
+			continue
+		else:
+			sync_remote_file(urli, fpathi)
+	
+	return output_filepaths
 
 # temporary until we have a whole set of anndata
 # used as a function for map further down
@@ -120,5 +129,7 @@ if __name__=="__main__":
 	#df = pd.read_sql_query("SELECT * FROM metadata WHERE ethnicity='African' AND assay LIKE '%10x%' AND tissue='lung parenchyma' AND cell_type LIKE '%CD4%';", con)
 	df = pd.read_sql_query("SELECT * FROM metadata WHERE ethnicity='African';", con)
 	con.close()
-	z = get_SingleCellExperiment(df, cache_directory='/vast/projects/RCP/human_cell_atlas')
-	print(z)
+	#z = get_SingleCellExperiment(df, cache_directory='/vast/projects/RCP/human_cell_atlas')
+	#print(z)
+	#df['file_id_db'].unique()
+	print(sync_assay_files(files=df['file_id_db'].unique(), subdirs=['original', 'cpm']))

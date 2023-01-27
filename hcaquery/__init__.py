@@ -51,17 +51,16 @@ def get_metadata(repository="https://harmonised-human-atlas.s3.amazonaws.com/met
 	cache_directory = get_default_cache_dir()):
 
 	sqlite_path = os.path.join(cache_directory, "metadata.sqlite")
+
 	sync_remote_file(
 		repository,
 		sqlite_path)
-	#con = sqlite3.connect(sqlite_path, uri=True)
+
 	eng = sqlalchemy.create_engine('sqlite:///{}'.format(sqlite_path))
 
 	# get metadata table to return to user
 	md = sqlalchemy.MetaData()
 	mdtab = sqlalchemy.Table("metadata", md, autoload_with=eng)
-	#md = sqlalchemy.MetaData(bind=eng)
-	#sqlalchemy.MetaData.reflect(md)
 	mdtab = md.tables['metadata']
 
 	return eng, mdtab
@@ -136,7 +135,6 @@ def get_SingleCellExperiment(
 if __name__=="__main__":
 
 	eng, metadatatab = get_metadata(cache_directory='/vast/scratch/users/yang.e/tmp/')
-	#df = pd.read_sql_query("SELECT * FROM metadata WHERE ethnicity='African' AND assay LIKE '%10x%' AND tissue='lung parenchyma' AND cell_type LIKE '%CD4%';", con)
 	#df = pd.read_sql("SELECT * FROM metadata WHERE ethnicity='African';", eng)
 	q = sqlalchemy.select(metadatatab).where(metadatatab.c.ethnicity=='African')
 	with eng.connect() as con:
@@ -145,5 +143,3 @@ if __name__=="__main__":
 	print(df)
 	z = get_SingleCellExperiment(df, cache_directory='/vast/projects/RCP/human_cell_atlas')
 	print(z)
-	#df['file_id_db'].unique()
-	#print(sync_assay_files(files=df['file_id_db'].unique(), subdirs=['original', 'cpm']))

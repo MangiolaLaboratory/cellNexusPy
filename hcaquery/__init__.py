@@ -49,8 +49,6 @@ def sync_remote_file(full_url, output_file):
 # function to get metadata
 def get_metadata(repository="https://harmonised-human-atlas.s3.amazonaws.com/metadata.sqlite", 
 	cache_directory = get_default_cache_dir()):
-	
-	import sqlalchemy 
 
 	sqlite_path = os.path.join(cache_directory, "metadata.sqlite")
 	sync_remote_file(

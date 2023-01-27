@@ -2,12 +2,12 @@
 #from scipy.sparse import csr_matrix
 import tempfile
 import os
-import sqlite3
 import anndata as ad
 import pandas as pd
 import tqdm
 import time
 import itertools
+import sqlalchemy
 
 REMOTE_URL = "https://cloudstor.aarnet.edu.au/plus/s/nrQ8q1OBS0sjtxv/download" #?path=%2Foriginal%2F000ae9ae99f825c20ccd93a4b1548719&files=se.rds"
 assay_map = {'counts': 'splitted_DB2_anndata', 'cpm': 'splitted_DB2_anndata_scaled'} #{'counts': 'original', 'cpm': 'cpm'}
@@ -47,15 +47,23 @@ def sync_remote_file(full_url, output_file):
 			os.remove(output_file)
 
 # function to get metadata
-def get_metadata(repository="https://harmonised-human-atlas.s3.amazonaws.com/metadata.sqlite", cache_directory = get_default_cache_dir()):
-	
+def get_metadata(repository="https://harmonised-human-atlas.s3.amazonaws.com/metadata.sqlite", 
+	cache_directory = get_default_cache_dir()):
+
 	sqlite_path = os.path.join(cache_directory, "metadata.sqlite")
+
 	sync_remote_file(
 		repository,
 		sqlite_path)
-	con = sqlite3.connect(sqlite_path, uri=True)
 
-	return con
+	eng = sqlalchemy.create_engine('sqlite:///{}'.format(sqlite_path))
+
+	# get metadata table to return to user
+	md = sqlalchemy.MetaData()
+	mdtab = sqlalchemy.Table("metadata", md, autoload_with=eng)
+	mdtab = md.tables['metadata']
+
+	return eng, mdtab
 
 def sync_assay_files(url = REMOTE_URL, cache_dir = get_default_cache_dir(), subdirs = [], files = []):
 
@@ -125,11 +133,13 @@ def get_SingleCellExperiment(
 	return pulled_data
 
 if __name__=="__main__":
-	con = get_metadata(cache_directory='/vast/scratch/users/yang.e/tmp/')
-	#df = pd.read_sql_query("SELECT * FROM metadata WHERE ethnicity='African' AND assay LIKE '%10x%' AND tissue='lung parenchyma' AND cell_type LIKE '%CD4%';", con)
-	df = pd.read_sql_query("SELECT * FROM metadata WHERE ethnicity='African';", con)
-	con.close()
-	#z = get_SingleCellExperiment(df, cache_directory='/vast/projects/RCP/human_cell_atlas')
-	#print(z)
-	#df['file_id_db'].unique()
-	print(sync_assay_files(files=df['file_id_db'].unique(), subdirs=['original', 'cpm']))
+
+	eng, metadatatab = get_metadata(cache_directory='/vast/scratch/users/yang.e/tmp/')
+	#df = pd.read_sql("SELECT * FROM metadata WHERE ethnicity='African';", eng)
+	q = sqlalchemy.select(metadatatab).where(metadatatab.c.ethnicity=='African')
+	with eng.connect() as con:
+		df = pd.DataFrame(con.execute(q))
+	eng.dispose()
+	print(df)
+	z = get_SingleCellExperiment(df, cache_directory='/vast/projects/RCP/human_cell_atlas')
+	print(z)

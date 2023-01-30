@@ -83,11 +83,16 @@ def sync_assay_files(url = REMOTE_URL, cache_dir = get_default_cache_dir(), subd
 
 # temporary until we have a whole set of anndata
 # used as a function for map further down
-def read_data(x):
+def read_data(x, features=[]):
 	try:
-		data = ad.read(x).copy()
-	except:
-		data = None
+		if features==[]:
+			data_view = ad.read(x)
+		else:
+			data_view = ad.read(x)[:,features]
+		data = data_view.copy()
+		data_view.file.close()
+	except FileNotFoundError:
+		print("Sample file {sf} not found! This probably means it was not downloaded correctly.".format(sf=x))
 
 	yield data
 
@@ -96,7 +101,8 @@ def get_SingleCellExperiment(
 	assays = ["counts", "cpm"],
 	cache_directory = get_default_cache_dir(),
 	repository = REMOTE_URL,
-	features = None
+	features = [],
+	silent = False
 ):
 
 	# error checking
@@ -104,7 +110,7 @@ def get_SingleCellExperiment(
 
 	assert isinstance(cache_directory, str), 'cache_directory must be a string'
 
-	assert isinstance(features, str) or features == None, 'features must be a string'
+	assert isinstance(features, (str, list, tuple)), 'features must be a string, list of strings, or tuple of strings'
 
 	assays = set(assays)
 
@@ -122,12 +128,13 @@ def get_SingleCellExperiment(
 
 	# concat backed data "hack" https://discourse.scverse.org/t/concat-anndata-objects-on-disk/400/2
 	# might be released in future versions https://github.com/scverse/anndata/issues/793
-	pulled_data = list(zip(*map(read_data,tqdm.tqdm(files2pull))))[0]
-
-	# stripping None's instead of exception handling because anndata dataset is incomplete
-	pulled_data = [x for x in pulled_data if not isinstance(x, type(None))]
+	if not silent:
+		files2pull = tqdm.tqdm(files2pull, desc="Reading sample files", ncols=80, unit='files')
+	pulled_data = list(zip(*map(read_data,files2pull,itertools.repeat(features))))[0]
 	
 	# temporary combine solution - original R code adds file_id_db as another column (I think)
+	if not silent:
+		print("Concatenating files...")
 	pulled_data = ad.concat(pulled_data, index_unique='-')
 
 	return pulled_data
@@ -136,10 +143,21 @@ if __name__=="__main__":
 
 	eng, metadatatab = get_metadata(cache_directory='/vast/scratch/users/yang.e/tmp/')
 	#df = pd.read_sql("SELECT * FROM metadata WHERE ethnicity='African';", eng)
-	q = sqlalchemy.select(metadatatab).where(metadatatab.c.ethnicity=='African')
+	#q = sqlalchemy.select(metadatatab).where(metadatatab.c.ethnicity=='African')
+	#q = sqlalchemy.select(metadatatab).where(\
+	#	(metadatatab.c.ethnicity=="African") & \
+	#	(metadatatab.c.assay.like('%{}%'.format('10x'))) & \
+	#	(metadatatab.c.tissue=="lung parenchyma") & \
+	#	(metadatatab.c.cell_type.like('%{}%'.format('CD4'))))
+	q = sqlalchemy.select([metadatatab.c.file_id_db, metadatatab.c.assay, metadatatab.c.tissue, metadatatab.c.cell_type]).where(\
+			(metadatatab.c.assay.like('%{}%'.format('10x'))) & \
+			(metadatatab.c.tissue=="lung parenchyma") & \
+			(metadatatab.c.cell_type.like('%{}%'.format('CD4'))))
+
 	with eng.connect() as con:
 		df = pd.DataFrame(con.execute(q))
 	eng.dispose()
 	print(df)
-	z = get_SingleCellExperiment(df, cache_directory='/vast/projects/RCP/human_cell_atlas')
+	#z = get_SingleCellExperiment(df, cache_directory='/vast/projects/human_cell_atlas_py',('))
+	z = get_SingleCellExperiment(df, cache_directory='/vast/projects/human_cell_atlas_py')
 	print(z)

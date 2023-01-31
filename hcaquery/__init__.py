@@ -10,6 +10,12 @@ import itertools
 import sqlalchemy
 
 REMOTE_URL = "https://swift.rc.nectar.org.au/v1/AUTH_06d6e008e3e642da99d806ba3ea629c5/harmonised-human-atlas" #?path=%2Foriginal%2F000ae9ae99f825c20ccd93a4b1548719&files=se.rds"
+METADATADB_URL = sqlalchemy.URL.create("mysql", \
+	username='public_access', \
+	password='password', \
+	host='7b4abe7csjh.db.cloud.edu.au', \
+	database='metadata')
+
 assay_map = {'counts': 'splitted_DB2_anndata', 'cpm': 'splitted_DB2_anndata_scaled'} #{'counts': 'original', 'cpm': 'cpm'}
 
 #???
@@ -47,16 +53,9 @@ def sync_remote_file(full_url, output_file):
 			os.remove(output_file)
 
 # function to get metadata
-def get_metadata(repository="https://harmonised-human-atlas.s3.amazonaws.com/metadata.sqlite", 
-	cache_directory = get_default_cache_dir()):
+def get_metadata(connection_url=METADATADB_URL):
 
-	sqlite_path = os.path.join(cache_directory, "metadata.sqlite")
-
-	sync_remote_file(
-		repository,
-		sqlite_path)
-
-	eng = sqlalchemy.create_engine('sqlite:///{}'.format(sqlite_path))
+	eng = sqlalchemy.create_engine(connection_url)
 
 	# get metadata table to return to user
 	md = sqlalchemy.MetaData()
@@ -141,19 +140,19 @@ def get_SingleCellExperiment(
 
 if __name__=="__main__":
 
-	#eng, metadatatab = get_metadata(cache_directory='/vast/scratch/users/yang.e/tmp')
-	sync_assay_files(cache_dir='/vast/scratch/users/yang.e/tmp/dummy-hca', subdirs=['original','cpm'], files=['18b89f46a7bd507ac85033d3e21c56d6','18ce8f08b718573c04d26094071e1e69'])
+	eng, metadatatab = get_metadata()
+	#sync_assay_files(cache_dir='/vast/scratch/users/yang.e/tmp/dummy-hca', subdirs=['original','cpm'], files=['18b89f46a7bd507ac85033d3e21c56d6','18ce8f08b718573c04d26094071e1e69'])
 	#df = pd.read_sql("SELECT * FROM metadata WHERE ethnicity='African';", eng)
 	#q = sqlalchemy.select(metadatatab).where(metadatatab.c.ethnicity=='African')
-	#q = sqlalchemy.select(metadatatab).where(\
-	#	(metadatatab.c.ethnicity=="African") & \
-	#	(metadatatab.c.assay.like('%{}%'.format('10x'))) & \
-	#	(metadatatab.c.tissue=="lung parenchyma") & \
-	#	(metadatatab.c.cell_type.like('%{}%'.format('CD4'))))
-	#q = sqlalchemy.select([metadatatab.c.file_id_db, metadatatab.c.assay, metadatatab.c.tissue, metadatatab.c.cell_type]).where(\
-	#		(metadatatab.c.assay.like('%{}%'.format('10x'))) & \
-	#		(metadatatab.c.tissue=="lung parenchyma") & \
-	#		(metadatatab.c.cell_type.like('%{}%'.format('CD4'))))
+	q = sqlalchemy.select(metadatatab.c.file_id_db).where(\
+		(metadatatab.c.ethnicity=="African") & \
+		(metadatatab.c.assay.like('%{}%'.format('10x'))) & \
+		(metadatatab.c.tissue=="lung parenchyma") & \
+		(metadatatab.c.cell_type.like('%{}%'.format('CD4'))))
+	q = sqlalchemy.select([metadatatab.c.file_id_db, metadatatab.c.assay, metadatatab.c.tissue, metadatatab.c.cell_type]).where(\
+			(metadatatab.c.assay.like('%{}%'.format('10x'))) & \
+			(metadatatab.c.tissue=="lung parenchyma") & \
+			(metadatatab.c.cell_type.like('%{}%'.format('CD4'))))
 
 	#with eng.connect() as con:
 	#	df = pd.DataFrame(con.execute(q))

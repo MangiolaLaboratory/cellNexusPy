@@ -56,10 +56,11 @@ def get_metadata(sqlite_url=METADATASQLITE_URL, \
 
 	sqlite_tarxz_path = os.path.join(cache_dir, "metadata.tar.xz")
 	sqlite_path = os.path.join(cache_dir, "metadata.sqlite")
-	sync_remote_file(sqlite_url, sqlite_tarxz_path)
-	if (not os.path.isfile(sqlite_path)) and os.path.isfile(sqlite_tarxz_path):
+	if not os.path.isfile(sqlite_path):
+		sync_remote_file(sqlite_url, sqlite_tarxz_path)
 		with tarfile.open(sqlite_tarxz_path) as f:
 			f.extractall(cache_dir)
+		os.remove(sqlite_tarxz_path)
 
 	eng = sqlalchemy.create_engine('sqlite:///{}'.format(sqlite_path))
 
@@ -95,8 +96,7 @@ def sync_assay_files(url = ASSAY_URL, cache_dir = get_default_cache_dir(), subdi
 			sync_remote_file(urli, fpathi)
 	
 	return output_filepaths
-
-# temporary until we have a whole set of anndata
+	
 # used as a function for map further down
 def read_data(x, features=[]):
 	try:

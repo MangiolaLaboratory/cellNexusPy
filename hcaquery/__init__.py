@@ -1,5 +1,3 @@
-#import anndata as ad
-#from scipy.sparse import csr_matrix
 import tempfile
 import os
 import anndata as ad
@@ -8,17 +6,21 @@ import tqdm
 import time
 import itertools
 import sqlalchemy
+try:
+	from sqlalchemy import URL
+except:
+	from sqlalchemy.engine import URL
 
-REMOTE_URL = "https://swift.rc.nectar.org.au/v1/AUTH_06d6e008e3e642da99d806ba3ea629c5/harmonised-human-atlas" #?path=%2Foriginal%2F000ae9ae99f825c20ccd93a4b1548719&files=se.rds"
-assay_map = {'counts': 'splitted_DB2_anndata', 'cpm': 'splitted_DB2_anndata_scaled'} #{'counts': 'original', 'cpm': 'cpm'}
+REMOTE_URL = "https://swift.rc.nectar.org.au/v1/AUTH_06d6e008e3e642da99d806ba3ea629c5"
+ASSAY_URL= '{}/harmonised-human-atlas'.format(REMOTE_URL)
+METADATASQLITE_URL = '{}/metadata-sqlite/metadata.tar.xz'.format(REMOTE_URL)
+METADATADB_URL = URL.create("mysql+pymysql", \
+	username='public_access', \
+	password='password', \
+	host='7f7wu64bnzu.db.cloud.edu.au', \
+	database='metadata')
 
-#???
-def as_sparse_DelayedMatrix():
-	pass
-
-#???
-def get_seurat():
-	pass
+assay_map = {'counts': 'original', 'cpm': 'cpm'}
 
 #using tmpdir as cachedir for the time being
 def get_default_cache_dir():
@@ -35,26 +37,29 @@ def sync_remote_file(full_url, output_file):
 			os.makedirs(output_dir)
 		print("Downloading {url} to {outfile}".format(url=full_url, outfile=output_file))
 
-		#TODO: produce warning if file isn't found (but don't stop)
 		try:
 			import urllib.request
 			r = urllib.request.urlopen(full_url)
 			urllib.request.urlretrieve(full_url, output_file, show_progress)
 
 		except Exception as e:
-			print("File {url} could not be downloaded.".format(url=full_url))
-			print(e)
-			os.remove(output_file)
+			if os.path.isfile(output_file): 
+				os.remove(output_file)
+			import sys
+			sys.exit("File {url} could not be downloaded.\n{e}".format(url=full_url, e=e))
 
 # function to get metadata
-def get_metadata(repository="https://harmonised-human-atlas.s3.amazonaws.com/metadata.sqlite", 
-	cache_directory = get_default_cache_dir()):
+def get_metadata(sqlite_url=METADATASQLITE_URL, \
+	cache_dir = get_default_cache_dir()):
 
-	sqlite_path = os.path.join(cache_directory, "metadata.sqlite")
+	import tarfile
 
-	sync_remote_file(
-		repository,
-		sqlite_path)
+	sqlite_tarxz_path = os.path.join(cache_dir, "metadata.tar.xz")
+	sqlite_path = os.path.join(cache_dir, "metadata.sqlite")
+	sync_remote_file(sqlite_url, sqlite_tarxz_path)
+	if (not os.path.isfile(sqlite_path)) and os.path.isfile(sqlite_tarxz_path):
+		with tarfile.open(sqlite_tarxz_path) as f:
+			f.extractall(cache_dir)
 
 	eng = sqlalchemy.create_engine('sqlite:///{}'.format(sqlite_path))
 
@@ -65,13 +70,23 @@ def get_metadata(repository="https://harmonised-human-atlas.s3.amazonaws.com/met
 
 	return eng, mdtab
 
-def sync_assay_files(url = REMOTE_URL, cache_dir = get_default_cache_dir(), subdirs = [], files = []):
+def _get_metadata_mysql(connection_url=METADATADB_URL, \
+	cache_dir = get_default_cache_dir()):
 
-	urls = ["{baseurl}/{subdir}/{sample}/{filename}".format(baseurl=url, subdir=sdir, sample=ifile, filename=filename) 
-		for sdir, ifile, filename in itertools.product(subdirs, files, ["assays.h5", "se.rds"])]
+	eng = sqlalchemy.create_engine(connection_url)
+	md = sqlalchemy.MetaData()
+	mdtab = sqlalchemy.Table("metadata", md, autoload_with=eng)
+	mdtab = md.tables['metadata']
+
+	return eng, mdtab
+
+def sync_assay_files(url = ASSAY_URL, cache_dir = get_default_cache_dir(), subdirs = [], files = []):
+
+	urls = ["{baseurl}/{subdir}/{samplefile}".format(baseurl=url, subdir=sdir, samplefile=ifile) 
+		for sdir, ifile in itertools.product(subdirs, files)]
 	
-	output_filepaths = [os.path.join(cache_dir, sdir, ifile, filename) 
-		for sdir, ifile, filename in itertools.product(subdirs, files, ["assays.h5", "se.rds"])]
+	output_filepaths = [os.path.join(cache_dir, sdir, ifile) 
+		for sdir, ifile in itertools.product(subdirs, files)]
 
 	for urli,fpathi in zip(urls,output_filepaths): 
 		if os.path.isfile(fpathi):
@@ -100,7 +115,7 @@ def get_SingleCellExperiment(
 	data = pd.DataFrame(),
 	assays = ["counts", "cpm"],
 	cache_directory = get_default_cache_dir(),
-	repository = REMOTE_URL,
+	repository = ASSAY_URL,
 	features = [],
 	silent = False
 ):
@@ -118,10 +133,12 @@ def get_SingleCellExperiment(
 		os.makedirs(cache_directory)
 	
 	# all the files to retrieve for query
-	files_to_read = data['file_id_db'].unique()
+	files_to_read = ['{}.h5ad'.format(sample) for sample in data['file_id_db'].unique()]
 
 	# mapping requested assay to subdirectory name
 	subdirs = [assay_map[a] for a in assays]
+
+	sync_assay_files(url=repository, cache_dir=cache_directory ,subdirs=subdirs, files=files_to_read)
 
 	# "outer" product of subdirectories and filenames
 	files2pull = [os.path.join(cache_directory,s,f) for s,f in itertools.product(subdirs, files_to_read)]
@@ -141,24 +158,22 @@ def get_SingleCellExperiment(
 
 if __name__=="__main__":
 
-	#eng, metadatatab = get_metadata(cache_directory='/vast/scratch/users/yang.e/tmp')
-	sync_assay_files(cache_dir='/vast/scratch/users/yang.e/tmp/dummy-hca', subdirs=['original','cpm'], files=['18b89f46a7bd507ac85033d3e21c56d6','18ce8f08b718573c04d26094071e1e69'])
-	#df = pd.read_sql("SELECT * FROM metadata WHERE ethnicity='African';", eng)
-	#q = sqlalchemy.select(metadatatab).where(metadatatab.c.ethnicity=='African')
-	#q = sqlalchemy.select(metadatatab).where(\
-	#	(metadatatab.c.ethnicity=="African") & \
-	#	(metadatatab.c.assay.like('%{}%'.format('10x'))) & \
-	#	(metadatatab.c.tissue=="lung parenchyma") & \
-	#	(metadatatab.c.cell_type.like('%{}%'.format('CD4'))))
+	eng, metadatatab = get_metadata()
+
+	q = sqlalchemy.select('*').where( \
+		metadatatab.c.ethnicity=="African", \
+		metadatatab.c.assay.like('%10x%'), \
+		metadatatab.c.tissue == "lung parenchyma", \
+		metadatatab.c.cell_type.like('%CD4%'))
 	#q = sqlalchemy.select([metadatatab.c.file_id_db, metadatatab.c.assay, metadatatab.c.tissue, metadatatab.c.cell_type]).where(\
 	#		(metadatatab.c.assay.like('%{}%'.format('10x'))) & \
 	#		(metadatatab.c.tissue=="lung parenchyma") & \
 	#		(metadatatab.c.cell_type.like('%{}%'.format('CD4'))))
 
-	#with eng.connect() as con:
-	#	df = pd.DataFrame(con.execute(q))
-	#eng.dispose()
-	#print(df)
-	#z = get_SingleCellExperiment(df, cache_directory='/vast/projects/human_cell_atlas_py',('))
-	#z = get_SingleCellExperiment(df, cache_directory='/vast/projects/human_cell_atlas_py')
-	#print(z)
+	with eng.connect() as con:
+		df = pd.DataFrame(con.execute(q))	
+	eng.dispose()
+	print(df)
+
+	z = get_SingleCellExperiment(df, repository='file:///vast/projects/human_cell_atlas_py/anndata')
+	print(z)

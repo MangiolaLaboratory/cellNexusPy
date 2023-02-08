@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "hcaquery"
+name = "CuratedAtlasQueryPy"
 version = "0.0.1"
 description = "Provides access to a copy of the Human Cell Atlas, but with harmonised metdata. This allows for uniform querying across numerous datasets within the Atlas using common fields such as cell type, tissue type, and patient ethnicity. Usage involves first querying the metadata table for cells of interest, and then downloading the corresponding cells into a anndata object."
 authors = ["Stefano Mangiola <mangiolastefano@gmail.com>"]

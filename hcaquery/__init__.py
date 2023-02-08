@@ -1,11 +1,6 @@
-import tempfile
-import os
+import tempfile, os, sys, tqdm, time, itertools, sqlalchemy
 import anndata as ad
 import pandas as pd
-import tqdm
-import time
-import itertools
-import sqlalchemy
 try:
 	from sqlalchemy import URL
 except:
@@ -27,7 +22,10 @@ def get_default_cache_dir():
 	return os.path.join(tempfile.gettempdir(),"hca_harmonised")
 
 def show_progress(block_num, block_size, total_size):
-	print('Download progress: {prog:3.1f}%'.format(prog=round(block_num * block_size / total_size *100, 2)), end="\r")
+	prog = round(block_num * block_size / total_size * 100, 2)
+	print('Download progress: {prog:3.1f}%'.format(prog=prog), \
+		end="\r", \
+		file=sys.stderr)
 
 # helper function to download file over http/https
 def sync_remote_file(full_url, output_file):
@@ -35,7 +33,7 @@ def sync_remote_file(full_url, output_file):
 		output_dir = os.path.dirname(output_file)
 		if not os.path.exists(output_dir):
 			os.makedirs(output_dir)
-		print("Downloading {url} to {outfile}".format(url=full_url, outfile=output_file))
+		print("Downloading {url} to {outfile}".format(url=full_url, outfile=output_file), file=sys.stderr)
 
 		try:
 			import urllib.request
@@ -45,7 +43,6 @@ def sync_remote_file(full_url, output_file):
 		except Exception as e:
 			if os.path.isfile(output_file): 
 				os.remove(output_file)
-			import sys
 			sys.exit("File {url} could not be downloaded.\n{e}".format(url=full_url, e=e))
 
 # function to get metadata
@@ -58,8 +55,17 @@ def get_metadata(sqlite_url=METADATASQLITE_URL, \
 	sqlite_path = os.path.join(cache_dir, "metadata.sqlite")
 	if not os.path.isfile(sqlite_path):
 		sync_remote_file(sqlite_url, sqlite_tarxz_path)
-		with tarfile.open(sqlite_tarxz_path) as f:
-			f.extractall(cache_dir)
+		try:
+			with tarfile.open(sqlite_tarxz_path) as f:
+				print("\nExtracting database...", file=sys.stderr)
+				f.extractall(cache_dir)
+		except Exception as e:
+			print("Failed to download/extract database\n")
+			print(e)
+			if os.isfile(sqlite_tarxz_path):
+				os.remove(sqlite_tarxz_path)
+			if os.isfile(sqlite_path):
+				os.remove(sqlite_path)
 		os.remove(sqlite_tarxz_path)
 
 	eng = sqlalchemy.create_engine('sqlite:///{}'.format(sqlite_path))
@@ -107,7 +113,7 @@ def read_data(x, features=[]):
 		data = data_view.copy()
 		data_view.file.close()
 	except FileNotFoundError:
-		print("Sample file {sf} not found! This probably means it was not downloaded correctly.".format(sf=x))
+		print("Sample file {sf} not found! This probably means it was not downloaded correctly.".format(sf=x), file=sys.stderr)
 
 	yield data
 
@@ -151,7 +157,7 @@ def get_SingleCellExperiment(
 	
 	# temporary combine solution - original R code adds file_id_db as another column (I think)
 	if not silent:
-		print("Concatenating files...")
+		print("Concatenating files...", file=sys.stderr)
 	pulled_data = ad.concat(pulled_data, index_unique='-')
 
 	return pulled_data

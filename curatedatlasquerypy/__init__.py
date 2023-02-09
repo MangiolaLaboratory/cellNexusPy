@@ -103,19 +103,14 @@ def sync_assay_files(url = ASSAY_URL, cache_dir = get_default_cache_dir(), subdi
 	
 	return output_filepaths
 	
-# used as a function for map further down
-def read_data(x, features=[]):
-	try:
-		if features==[]:
-			data_view = ad.read(x)
-		else:
-			data_view = ad.read(x)[:,features]
-		data = data_view.copy()
-		data_view.file.close()
-	except FileNotFoundError:
-		print("Sample file {sf} not found! This probably means it was not downloaded correctly.".format(sf=x), file=sys.stderr)
+# used as a function for reduce further down
+# f2[0] is the h5ad path and f2[1] is the features array.
+def read_data(ar, f2):
+	if ar:
+		return ad.concat([ar, ad.read(f2[0])[:,f2[1]]], index_unique='-')
+	else:
+		return ad.read(f2[0])[:, f2[1]] 
 
-	yield data
 
 def get_SingleCellExperiment(
 	data = pd.DataFrame(),
@@ -137,6 +132,9 @@ def get_SingleCellExperiment(
 
 	if not os.path.exists(cache_directory):
 		os.makedirs(cache_directory)
+
+    # need the reduce function
+	import functools
 	
 	# all the files to retrieve for query
 	files_to_read = ['{}.h5ad'.format(sample) for sample in data['file_id_db'].unique()]
@@ -153,33 +151,35 @@ def get_SingleCellExperiment(
 	# might be released in future versions https://github.com/scverse/anndata/issues/793
 	if not silent:
 		files2pull = tqdm.tqdm(files2pull, desc="Reading sample files", ncols=80, unit='files')
-	pulled_data = list(zip(*map(read_data,files2pull,itertools.repeat(features))))[0]
-	
-	# temporary combine solution - original R code adds file_id_db as another column (I think)
-	if not silent:
-		print("Concatenating files...", file=sys.stderr)
-	pulled_data = ad.concat(pulled_data, index_unique='-')
+    
+    # this step uses heaps of mem depending on the size of the file(s) being concat'ed
+	pulled_data = functools.reduce( \
+		read_data, \
+        zip(files2pull, itertools.repeat(features)), \
+        None)
 
 	return pulled_data
 
 if __name__=="__main__":
 
-	eng, metadatatab = get_metadata()
+	eng, metadatatab = get_metadata(cache_dir='/vast/projects/human_cell_atlas_py')
 
-	q = sqlalchemy.select('*').where( \
-		metadatatab.c.ethnicity=="African", \
-		metadatatab.c.assay.like('%10x%'), \
-		metadatatab.c.tissue == "lung parenchyma", \
-		metadatatab.c.cell_type.like('%CD4%'))
+	# q = sqlalchemy.select('*').where( \
+	# 	metadatatab.c.ethnicity=="African", \
+	# 	metadatatab.c.assay.like('%10x%'), \
+	# 	metadatatab.c.tissue == "lung parenchyma", \
+	# 	metadatatab.c.cell_type.like('%CD4%'))
 	#q = sqlalchemy.select([metadatatab.c.file_id_db, metadatatab.c.assay, metadatatab.c.tissue, metadatatab.c.cell_type]).where(\
 	#		(metadatatab.c.assay.like('%{}%'.format('10x'))) & \
 	#		(metadatatab.c.tissue=="lung parenchyma") & \
 	#		(metadatatab.c.cell_type.like('%{}%'.format('CD4'))))
+	q = sqlalchemy.select(metadatatab.c['.cell','file_id_db','disease','file_id','tissue_harmonised']).where(metadatatab.c.cell_type_harmonised=='nk')
+
 
 	with eng.connect() as con:
 		df = pd.DataFrame(con.execute(q))	
 	eng.dispose()
 	print(df)
 
-	z = get_SingleCellExperiment(df, repository='file:///vast/projects/human_cell_atlas_py/anndata')
+	z = get_SingleCellExperiment(df, repository='file:///vast/projects/human_cell_atlas_py/anndata', features=['NCAM1'], assays=['cpm'], cache_directory='/vast/projects/human_cell_atlas_py/anndata')
 	print(z)

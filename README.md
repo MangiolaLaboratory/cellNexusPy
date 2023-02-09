@@ -1,4 +1,5 @@
 # CuratedAtlasQueryPy
+<img src="inst/logo.png" width="120px" height="139px">
     
 ## Import the package
 

@@ -130,7 +130,7 @@ For those who prefer writing raw SQL over SQLalchemy, you can use pandas `read_s
 
 
 ```python
-eng, mdtab = hcaquery.get_metadata()
+eng, mdtab = curatedatlasquerypy.get_metadata()
 
 with eng.connect() as conn:
     query = sqlalchemy.text("SELECT * FROM metadata \

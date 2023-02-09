@@ -69,7 +69,10 @@ with eng.connect() as conn:
     mddf = pd.DataFrame(conn.execute(q))
 
 # obtaining raw counts
-res = curatedatlasquerypy.get_SingleCellExperiment(mddf, assays = ['counts'], cache_directory='/vast/projects/cellxgene_curated/anndata')
+res = curatedatlasquerypy.get_SingleCellExperiment(mddf, \
+                                                   assays = ['counts'], \
+                                                   cache_directory='/vast/projects/cellxgene_curated/anndata' \
+                                                  )
 res
 ```
 ```

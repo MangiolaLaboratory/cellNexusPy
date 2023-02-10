@@ -106,10 +106,16 @@ def sync_assay_files(url = ASSAY_URL, cache_dir = get_default_cache_dir(), subdi
 # used as a function for reduce further down
 # f2[0] is the h5ad path and f2[1] is the features array.
 def read_data(ar, f2):
-	if ar:
-		return ad.concat([ar, ad.read(f2[0])[:,f2[1]]], index_unique='-')
+	if f2[1] == []:
+		if ar:
+			return ad.concat([ar, ad.read(f2[0])], index_unique='-')
+		else:
+			return ad.read(f2[0])
 	else:
-		return ad.read(f2[0])[:, f2[1]] 
+		if ar:
+			return ad.concat([ar, ad.read(f2[0])[:,f2[1]]], index_unique='-')
+		else:
+			return ad.read(f2[0])[:, f2[1]] 
 
 
 def get_SingleCellExperiment(

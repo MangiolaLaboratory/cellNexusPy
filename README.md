@@ -1,493 +1,66 @@
-# Curated Atlas Query (Python)
+<img src="inst/logo.png" width="120px" height="139px">
 
-## Importing the package
+# CuratedAtlasQueryPy
 
 
+CuratedAtlasQuery is a query interface that allow the programmatic exploration and retrival o the harmonised, curated and reannotated CELLxGENE single-cell human cell atlas. Data can be retrieved at cell, sample, or dataset levels based on filtering criteria.
+
+## Query interface
+
+### Import the package
 ```python
-import hcaquery
-```
-
-You will probably need pandas and sqlalchemy too, to query and organise the metadata
-
-
-```python
+import curatedatlasquerypy
 import pandas as pd
 import sqlalchemy
 ```
 
-## Getting the metadata
-The `get_metadata()` function returns an SQLAlchemy engine and `MetaData` object which can be used to form queries and execute them.
-
-
+### Connect to the metadata database
 ```python
-eng, mdtab = hcaquery.get_metadata()
+# Use the cache_dir argument to point to the WEHI central data store.
+eng, mdtab = curatedatlasquerypy.get_metadata(cache_dir='/vast/projects/cellxgene_curated')
+print(mdtab.columns)
+
+
 ```
 
-    Downloading https://swift.rc.nectar.org.au/v1/AUTH_06d6e008e3e642da99d806ba3ea629c5/metadata-sqlite/metadata.tar.xz to /vast/scratch/users/yang.e/tmp/hca_harmonised/metadata.tar.xz
-    Download progress: 100.0%
-    Extracting database...
+    ReadOnlyColumnCollection(metadata..cell, metadata.sample_id_db, metadata..sample, ..., metadata.cell_annotation_blueprint_singler, metadata.n_cell_type_in_tissue, metadata.n_tissue_in_cell_type)
 
-
-### Querying the metadata
+### Explore the tissue
 SQLAlchemy core syntax can be used to form and execute the query
 
 
 ```python
-q = sqlalchemy.select('*').where( \
-                                 mdtab.c.ethnicity == "African", \
-                                 mdtab.c.assay.like('%10x%'), \
-                                 mdtab.c.tissue == "lung parenchyma", \
-                                 mdtab.c.cell_type.like('%CD4%') \
-                                )
-```
-
-
-```python
+q = sqlalchemy.select(mdtab.c.tissue, mdtab.c.file_id).distinct()
 with eng.connect() as conn:
     mddf = pd.DataFrame(conn.execute(q))
     
-eng.dispose()
 mddf
 ```
 
 
-
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>.cell</th>
-      <th>sample_id_db</th>
-      <th>.sample</th>
-      <th>.sample_name</th>
-      <th>assay</th>
-      <th>assay_ontology_term_id</th>
-      <th>file_id_db</th>
-      <th>cell_type</th>
-      <th>cell_type_ontology_term_id</th>
-      <th>development_stage</th>
-      <th>...</th>
-      <th>s3_uri</th>
-      <th>user_submitted</th>
-      <th>created_at.y</th>
-      <th>updated_at.y</th>
-      <th>cell_type_harmonised</th>
-      <th>confidence_class</th>
-      <th>cell_annotation_azimuth_l2</th>
-      <th>cell_annotation_blueprint_singler</th>
-      <th>n_cell_type_in_tissue</th>
-      <th>n_tissue_in_cell_type</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>ACAGCCGGTCCGTTAA_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tem</td>
-      <td>1.0</td>
-      <td>mait</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>31.0</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>GGGAATGAGCCCAGCT_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>TCTTCGGAGTAGCGGT_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>CCTTACGAGAGCTGCA_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>ATCTACTCAATGGAAT_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>...</th>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-    </tr>
-    <tr>
-      <th>1566</th>
-      <td>TACTTACGTAATAGCA_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>1567</th>
-      <td>AGATAGAGTGCCTTCT_SC84</td>
-      <td>21ef23ac07391c64cadc78e16511effa</td>
-      <td>13f5331436ecaeaeffada423c8dbd1ef</td>
-      <td>NU_CZI01___lung parenchyma___52-year-old human...</td>
-      <td>10x 3' v3</td>
-      <td>EFO:0009922</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>52-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>1568</th>
-      <td>CGCGGTATCCGCGCAA_SC24</td>
-      <td>9dfbd16390b119392af9406561cb664f</td>
-      <td>055e5172053464e8efc5de1b5b3a7646</td>
-      <td>Donor_06___lung parenchyma___22-year-old human...</td>
-      <td>10x 3' v2</td>
-      <td>EFO:0009899</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>22-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>1569</th>
-      <td>TACAACGTCAGCATTG_SC84</td>
-      <td>21ef23ac07391c64cadc78e16511effa</td>
-      <td>13f5331436ecaeaeffada423c8dbd1ef</td>
-      <td>NU_CZI01___lung parenchyma___52-year-old human...</td>
-      <td>10x 3' v3</td>
-      <td>EFO:0009922</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>52-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>3.0</td>
-      <td>cd4 tcm</td>
-      <td>tregs</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>1570</th>
-      <td>CATTCGCTCAATACCG_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tem</td>
-      <td>1.0</td>
-      <td>cd4 tem</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>31.0</td>
-    </tr>
-  </tbody>
-</table>
-<p>1571 rows × 56 columns</p>
-</div>
-
-
-
-### Exploring the HCA contents
-
-
-```python
-eng, mdtab = hcaquery.get_metadata()
-
-from sqlalchemy import func
-
-q = sqlalchemy.select(mdtab.c.tissue, mdtab.c.file_id, func.count()).distinct().group_by(mdtab.c.tissue)
-with eng.connect() as conn:
-    mddf = pd.DataFrame(conn.execute(q))
-    
-eng.dispose()
-mddf
 ```
+                 tissue                               file_id
+0        adipose tissue  343f46f2-7cdd-4da8-bc7f-50a18b2c0e8e
+1        adipose tissue  5cb7ccfc-41d5-4613-82ce-e6d1888a0228
+2        adipose tissue  700695a4-b3cc-4352-9c6c-25bf054d016b
+3        adipose tissue  76afd5a3-7458-4d77-b6e9-f47c059047e3
+4        adipose tissue  e40591e7-0e5a-4bef-9b60-7015abe5b17f
+..                  ...                                   ...
+886         vasculature  76afd5a3-7458-4d77-b6e9-f47c059047e3
+887      vault of skull  e40591e7-0e5a-4bef-9b60-7015abe5b17f
+888        venous blood  a84321f2-5b06-4274-8f96-e1876340600e
+889  vermiform appendix  e40591e7-0e5a-4bef-9b60-7015abe5b17f
+890        zone of skin  c48402e4-e7db-4c82-a9e9-51e285e5165c
 
-
-
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>tissue</th>
-      <th>file_id</th>
-      <th>count_1</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>adipose tissue</td>
-      <td>343f46f2-7cdd-4da8-bc7f-50a18b2c0e8e</td>
-      <td>22114</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>adrenal gland</td>
-      <td>16217568-ec4e-4391-891d-1e14c64da474</td>
-      <td>547539</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>ampulla of uterine tube</td>
-      <td>3044b5dd-a499-456e-86d9-94769bc3b63e</td>
-      <td>43247</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>anterior cingulate cortex</td>
-      <td>a91f075b-52d5-4aa3-8ecc-86c4763a49b3</td>
-      <td>7417</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>anterior part of tongue</td>
-      <td>343f46f2-7cdd-4da8-bc7f-50a18b2c0e8e</td>
-      <td>10734</td>
-    </tr>
-    <tr>
-      <th>...</th>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-    </tr>
-    <tr>
-      <th>160</th>
-      <td>vasculature</td>
-      <td>343f46f2-7cdd-4da8-bc7f-50a18b2c0e8e</td>
-      <td>5572</td>
-    </tr>
-    <tr>
-      <th>161</th>
-      <td>vault of skull</td>
-      <td>e40591e7-0e5a-4bef-9b60-7015abe5b17f</td>
-      <td>5129</td>
-    </tr>
-    <tr>
-      <th>162</th>
-      <td>venous blood</td>
-      <td>a84321f2-5b06-4274-8f96-e1876340600e</td>
-      <td>17625</td>
-    </tr>
-    <tr>
-      <th>163</th>
-      <td>vermiform appendix</td>
-      <td>e40591e7-0e5a-4bef-9b60-7015abe5b17f</td>
-      <td>4486</td>
-    </tr>
-    <tr>
-      <th>164</th>
-      <td>zone of skin</td>
-      <td>c48402e4-e7db-4c82-a9e9-51e285e5165c</td>
-      <td>15457</td>
-    </tr>
-  </tbody>
-</table>
-<p>165 rows × 3 columns</p>
-</div>
-
-
+[891 rows x 2 columns]
+```
 
 ### Querying using raw SQL
 For those who prefer writing raw SQL over SQLalchemy, you can use pandas `read_sql_query()` instead of SQLAlchemy.
 
 
 ```python
-eng, mdtab = hcaquery.get_metadata()
+eng, mdtab = curatedatlasquerypy.get_metadata()
 
 with eng.connect() as conn:
     query = sqlalchemy.text("SELECT * FROM metadata \
@@ -501,451 +74,103 @@ eng.dispose()
 mddf
 ```
 
+## Download single-cell RNA sequencing counts
 
-
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>.cell</th>
-      <th>sample_id_db</th>
-      <th>.sample</th>
-      <th>.sample_name</th>
-      <th>assay</th>
-      <th>assay_ontology_term_id</th>
-      <th>file_id_db</th>
-      <th>cell_type</th>
-      <th>cell_type_ontology_term_id</th>
-      <th>development_stage</th>
-      <th>...</th>
-      <th>s3_uri</th>
-      <th>user_submitted</th>
-      <th>created_at.y</th>
-      <th>updated_at.y</th>
-      <th>cell_type_harmonised</th>
-      <th>confidence_class</th>
-      <th>cell_annotation_azimuth_l2</th>
-      <th>cell_annotation_blueprint_singler</th>
-      <th>n_cell_type_in_tissue</th>
-      <th>n_tissue_in_cell_type</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>ACAGCCGGTCCGTTAA_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tem</td>
-      <td>1.0</td>
-      <td>mait</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>31.0</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>GGGAATGAGCCCAGCT_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>TCTTCGGAGTAGCGGT_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>CCTTACGAGAGCTGCA_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>ATCTACTCAATGGAAT_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>...</th>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-    </tr>
-    <tr>
-      <th>1566</th>
-      <td>TACTTACGTAATAGCA_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>1567</th>
-      <td>AGATAGAGTGCCTTCT_SC84</td>
-      <td>21ef23ac07391c64cadc78e16511effa</td>
-      <td>13f5331436ecaeaeffada423c8dbd1ef</td>
-      <td>NU_CZI01___lung parenchyma___52-year-old human...</td>
-      <td>10x 3' v3</td>
-      <td>EFO:0009922</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>52-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>1568</th>
-      <td>CGCGGTATCCGCGCAA_SC24</td>
-      <td>9dfbd16390b119392af9406561cb664f</td>
-      <td>055e5172053464e8efc5de1b5b3a7646</td>
-      <td>Donor_06___lung parenchyma___22-year-old human...</td>
-      <td>10x 3' v2</td>
-      <td>EFO:0009899</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>22-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>4.0</td>
-      <td>cd4 tcm</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>1569</th>
-      <td>TACAACGTCAGCATTG_SC84</td>
-      <td>21ef23ac07391c64cadc78e16511effa</td>
-      <td>13f5331436ecaeaeffada423c8dbd1ef</td>
-      <td>NU_CZI01___lung parenchyma___52-year-old human...</td>
-      <td>10x 3' v3</td>
-      <td>EFO:0009922</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>52-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tcm</td>
-      <td>3.0</td>
-      <td>cd4 tcm</td>
-      <td>tregs</td>
-      <td>28.0</td>
-      <td>32.0</td>
-    </tr>
-    <tr>
-      <th>1570</th>
-      <td>CATTCGCTCAATACCG_F02526</td>
-      <td>33cdeb84ae1462d723c19af1bea2a366</td>
-      <td>4fc10a6b85e5fa688b253db4e0db8ba0</td>
-      <td>VUHD92___lung parenchyma___55-year-old human s...</td>
-      <td>10x 5' v1</td>
-      <td>EFO:0011025</td>
-      <td>bc380dae8b14313a870973697842878b</td>
-      <td>CD4-positive, alpha-beta T cell</td>
-      <td>CL:0000624</td>
-      <td>55-year-old human stage</td>
-      <td>...</td>
-      <td>s3://corpora-data-prod/13825e35-ea32-4104-a0b7...</td>
-      <td>1</td>
-      <td>19226.0</td>
-      <td>19227.0</td>
-      <td>cd4 tem</td>
-      <td>1.0</td>
-      <td>cd4 tem</td>
-      <td>cd4 tem</td>
-      <td>28.0</td>
-      <td>31.0</td>
-    </tr>
-  </tbody>
-</table>
-<p>1571 rows × 56 columns</p>
-</div>
-
-
-
-## Extracting Counts
-
-Query raw counts
-
-
+### Query raw counts
 ```python
-res = hcaquery.get_SingleCellExperiment(mddf, assays = ['counts'], repository='file:///vast/projects/human_cell_atlas_py/anndata')
+# forming the query
+q = sqlalchemy.select('*').where( \
+                                 mdtab.c.ethnicity == "African", \
+                                 mdtab.c.assay.like('%10x%'), \
+                                 mdtab.c.tissue == "lung parenchyma", \
+                                 mdtab.c.cell_type.like('%CD4%') \
+                                )
+# executing query                                
+with eng.connect() as conn:
+    mddf = pd.DataFrame(conn.execute(q))
+
+# obtaining raw counts
+res = curatedatlasquerypy.get_SingleCellExperiment(mddf, \
+                                                   assays = ['counts'], \
+                                                   cache_directory='/vast/projects/cellxgene_curated/anndata' \
+                                                  )
 res
 ```
-
-    Downloading file:///vast/projects/human_cell_atlas_py/anndata/original/bc380dae8b14313a870973697842878b.h5ad to /vast/scratch/users/yang.e/tmp/hca_harmonised/original/bc380dae8b14313a870973697842878b.h5ad
-    Reading sample files: 100%|█████████████████| 1/1 [00:00<00:00, 13315.25files/s]
-    Concatenating files...
-
-
-
-
-
-    AnnData object with n_obs × n_vars = 21285 × 60661
-
-
-
-Query counts scaled per million. This is helpful if just few genes are of interest
-
-
+```
+AnnData object with n_obs × n_vars = 21285 × 60661
+```
+### Query counts scaled per million
 ```python
-res = hcaquery.get_SingleCellExperiment(mddf, assays = ['cpm'], repository='file:///vast/projects/human_cell_atlas_py/anndata')
+# forming the query
+q = sqlalchemy.select('*').where( \
+                                 mdtab.c.ethnicity == "African", \
+                                 mdtab.c.assay.like('%10x%'), \
+                                 mdtab.c.tissue == "lung parenchyma", \
+                                 mdtab.c.cell_type.like('%CD4%') \
+                                )
+# executing query                                
+with eng.connect() as conn:
+    mddf = pd.DataFrame(conn.execute(q))
+
+# obtaining scaled counts
+res = curatedatlasquerypy.get_SingleCellExperiment(mddf, \
+                                                   assays = ['cpm'], \
+                                                   cache_directory='/vast/projects/cellxgene_curated/anndata' \
+                                                  )
 res
 ```
+```
+AnnData object with n_obs × n_vars = 21285 × 60661
+```
 
-    Downloading file:///vast/projects/human_cell_atlas_py/anndata/cpm/bc380dae8b14313a870973697842878b.h5ad to /vast/scratch/users/yang.e/tmp/hca_harmonised/cpm/bc380dae8b14313a870973697842878b.h5ad
-    Reading sample files: 100%|█████████████████| 1/1 [00:00<00:00, 11155.06files/s]
-    Concatenating files...
-
-
-
-
-
-    AnnData object with n_obs × n_vars = 21285 × 60661
-
-
-
-
+### Extract only a subset of genes
 ```python
-res=hcaquery.get_SingleCellExperiment(mddf, features = ['PUM1'], repository='file:///vast/projects/human_cell_atlas_py/anndata')
+# forming the query
+q = sqlalchemy.select('*').where( \
+                                 mdtab.c.ethnicity == "African", \
+                                 mdtab.c.assay.like('%10x%'), \
+                                 mdtab.c.tissue == "lung parenchyma", \
+                                 mdtab.c.cell_type.like('%CD4%') \
+                                )
+# executing query                                
+with eng.connect() as conn:
+    mddf = pd.DataFrame(conn.execute(q))
+
+# obtaining scaled counts
+res = curatedatlasquerypy.get_SingleCellExperiment(mddf, \
+                                                   assays = ['cpm'], \
+                                                   features = ['PUM1'], \
+                                                   cache_directory='/vast/projects/cellxgene_curated/anndata' \
+                                                  )
+                                                  
 res
 ```
-
-    Reading sample files: 100%|██████████████████| 2/2 [00:00<00:00, 9927.35files/s]
-    Concatenating files...
-
-
-
-
-
-    AnnData object with n_obs × n_vars = 42570 × 1
-
-
-
-
-```python
-res.obs
+```
+AnnData object with n_obs × n_vars = 21285 × 1
 ```
 
+## Cell metadata
+Dataset-specific columns (definitions available at cellxgene.cziscience.com)
 
+`cell_count`, `collection_id`, `created_at.x`, `created_at.y`, `dataset_deployments`, `dataset_id`, `file_id`, `filename`, `filetype`, `is_primary_data.y`, `is_valid`, `linked_genesets`, `mean_genes_per_cell`, `name`, `published`, `published_at`, `revised_at`, `revision`, `s3_uri`, `schema_version`, `tombstone`, `updated_at.x`, `updated_at.y`, `user_submitted`, `x_normalization`
 
+Sample-specific columns (definitions available at cellxgene.cziscience.com)
 
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
+`.sample`, `.sample_name`, `age_days`, `assay`, `assay_ontology_term_id`, `development_stage`, `development_stage_ontology_term_id`, `ethnicity`, `ethnicity_ontology_term_id`, `experiment___`, `organism`, `organism_ontology_term_id`, `sample_placeholder`, `sex`, `sex_ontology_term_id`, `tissue`, `tissue_harmonised`, `tissue_ontology_term_id`, `disease`, `disease_ontology_term_id`, `is_primary_data.x`
 
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
+Cell-specific columns (definitions available at cellxgene.cziscience.com)
 
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>P2_2_TGTTCCGAGGCCCGTT-0</th>
-    </tr>
-    <tr>
-      <th>CTAATGGAGTGGGATC_HD67-0</th>
-    </tr>
-    <tr>
-      <th>GCTCCTAAGTGGACGT-1-HCATisStab7659969-0</th>
-    </tr>
-    <tr>
-      <th>CATGTACAGTGGGAT_GRO-09_biopsy-0</th>
-    </tr>
-    <tr>
-      <th>ACAGCCGGTCCGTTAA_F02526-0</th>
-    </tr>
-    <tr>
-      <th>...</th>
-    </tr>
-    <tr>
-      <th>CGGACACAGTGGAGTC_GRO-03_biopsy-1</th>
-    </tr>
-    <tr>
-      <th>D344_Brus_Dis1_GATGCTAAGTACGCCC-1-14-1</th>
-    </tr>
-    <tr>
-      <th>CTGATAGCAAATACAG-SC45-1</th>
-    </tr>
-    <tr>
-      <th>P2_3_TAAGTGCGTCCAACTA-1</th>
-    </tr>
-    <tr>
-      <th>AGCGGCACCCGATA-SC31-1</th>
-    </tr>
-  </tbody>
-</table>
-<p>42570 rows × 0 columns</p>
-</div>
+`.cell`, `cell_type`, `cell_type_ontology_term_idm`, `cell_type_harmonised`, `confidence_class`, `cell_annotation_azimuth_l2`, `cell_annotation_blueprint_singler`
 
-
-
-
-```python
-
-```
+Through harmonisation and curation we introduced custom column, not present in the original CELLxGENE metadata
+* `tissue_harmonised`: a coarser tissue name for better filtering
+* `age_days`: the number of days corresponding to the age
+* `cell_type_harmonised`: the consensus call identiti (for immune cells) using the original and three novel annotations using Seurat Azimuth and SingleR
+* `confidence_class`: an ordinal class of how confident cell_type_harmonised is. 1 is complete consensus, 2 is 3 out of four and so on.
+* `cell_annotation_azimuth_l2`: Azimuth cell annotation
+* `cell_annotation_blueprint_singler`: SingleR cell annotation using Blueprint reference
+* `cell_annotation_blueprint_monaco`: SingleR cell annotation using Monaco reference
+* `sample_id_db`: Sample subdivision for internal use
+* `file_id_db`: File subdivision for internal use
+* `.sample`: Sample ID
+* `.sample_name`: How samples were defined

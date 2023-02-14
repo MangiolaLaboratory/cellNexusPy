@@ -7,15 +7,17 @@ from pathlib import Path
 from appdirs import user_cache_dir
 import requests
 import duckdb
-from typing import Iterable, Literal
+from typing import Any, Iterable, Literal
 import functools
+import numpy as np
+from numpy.typing import NDArray
 
 import anndata as ad
 import pandas as pd
 from tqdm import tqdm
 
 REMOTE_URL = "https://swift.rc.nectar.org.au/v1/AUTH_06d6e008e3e642da99d806ba3ea629c5"
-ASSAY_URL= '{}/harmonised-human-atlas'.format(REMOTE_URL)
+ASSAY_URL= '{}/harmonised-human-atlas-anndata'.format(REMOTE_URL)
 METADATA_URL = '{}/metadata-sqlite/metadata.parquet'.format(REMOTE_URL)
 
 assay_map = {'counts': 'original', 'cpm': 'cpm'}
@@ -42,21 +44,16 @@ def get_metadata(parquet_url: str=METADATA_URL, cache_dir: os.PathLike[str] = ge
 	conn = duckdb.connect()
 	return conn, conn.from_parquet(str(parquet_local))
 
-def sync_assay_files(url: str = ASSAY_URL, cache_dir: Path = get_default_cache_dir(), subdirs: list[str] = [], files: list[str] = []):
+def sync_assay_files(url: str = ASSAY_URL, cache_dir: Path = get_default_cache_dir(), subdirs: Iterable[str] = [], files: Iterable[str] = []):
+	for subdir in subdirs:
+		for file in files:
+			url = f"{url}/{subdir}/{file}"
+			output_filepath = cache_dir / subdir / file
 
-	urls = ["{baseurl}/{subdir}/{samplefile}".format(baseurl=url, subdir=sdir, samplefile=ifile) 
-		for sdir, ifile in itertools.product(subdirs, files)]
-	
-	output_filepaths = [os.path.join(cache_dir, sdir, ifile) 
-		for sdir, ifile in itertools.product(subdirs, files)]
-
-	for urli,fpathi in zip(urls,output_filepaths): 
-		if os.path.isfile(fpathi):
-			continue
-		else:
-			sync_remote_file(urli, fpathi)
-	
-	return output_filepaths
+			if not output_filepath.exists():
+				sync_remote_file(url, output_filepath)
+			
+			yield subdir, output_filepath
 	
 # used as a function for reduce further down
 # f2[0] is the h5ad path and f2[1] is the features array.
@@ -84,27 +81,35 @@ def get_SingleCellExperiment(
 
 	# error checking
 	assert set(assays).issubset(set(assay_map.keys()))
-	assert isinstance(cache_directory, str), 'cache_directory must be a string'
+	assert isinstance(cache_directory, Path), 'cache_directory must be a Path'
 	assert isinstance(features, (str, list, tuple)), 'features must be a string, list of strings, or tuple of strings'
 
 	assays = set(assays)
 	cache_directory.mkdir(exist_ok=True, parents=True)
 
 	# all the files to retrieve for query
-	files_to_read = data.project("file_id_db").distinct().fetchnumpy()
+	files_to_read: pd.Series[str] = data.project("file_id_db").distinct().fetchdf()["file_id_db"].str.cat([".h5ad"])
 
 	# mapping requested assay to subdirectory name
 	subdirs = [assay_map[a] for a in assays]
 
-	sync_assay_files(url=repository, cache_dir=cache_directory ,subdirs=subdirs, files=files_to_read)
+	synced = sync_assay_files(url=repository, cache_dir=cache_directory ,subdirs=subdirs, files=files_to_read)
+
+	ann = ad.AnnData()
+	for assay_name, files in itertools.groupby(synced, key=lambda x: x[0]):
+		ann.layers[assay_name] = ad.concat(files).X
+	ann.obs = data.fetchdf()
+
 
 	# "outer" product of subdirectories and filenames
-	files2pull = [os.path.join(cache_directory,s,f) for s,f in itertools.product(subdirs, files_to_read)]
+	files2pull = (os.path.join(cache_directory,s,f) for s,f in itertools.product(subdirs, files_to_read))
+
+	return ad.concat(files2pull)
 
 	# concat backed data "hack" https://discourse.scverse.org/t/concat-anndata-objects-on-disk/400/2
 	# might be released in future versions https://github.com/scverse/anndata/issues/793
-	if not silent:
-		files2pull = tqdm.tqdm(files2pull, desc="Reading sample files", ncols=80, unit='files')
+	# if not silent:
+	# 	files2pull = tqdm.tqdm(files2pull, desc="Reading sample files", ncols=80, unit='files')
     
     # this step uses heaps of mem depending on the size of the file(s) being concat'ed
 	pulled_data = functools.reduce( \

@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "curated_atlas_query_py"
+name = "curated-atlas-query-py"
 version = "0.0.1"
 description = "Provides access to a copy of the Human Cell Atlas, but with harmonised metdata. This allows for uniform querying across numerous datasets within the Atlas using common fields such as cell type, tissue type, and patient ethnicity. Usage involves first querying the metadata table for cells of interest, and then downloading the corresponding cells into a anndata object."
 authors = ["Stefano Mangiola <mangiolastefano@gmail.com>"]
@@ -11,9 +11,9 @@ python = ">=3.8.0,<4"
 pandas = ">=1.4.0"
 tqdm = "^4.64.1"
 anndata = ">=0.8.0"
-polars = "^0.16.2"
 requests = "^2.28.2"
 appdirs = "^1.4.4"
+duckdb = "^0.7.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"

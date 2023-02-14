@@ -11,6 +11,7 @@ from typing import Any, Iterable, Literal
 import functools
 import numpy as np
 from numpy.typing import NDArray
+import operator
 
 import anndata as ad
 import pandas as pd
@@ -95,10 +96,12 @@ def get_SingleCellExperiment(
 
 	synced = sync_assay_files(url=repository, cache_dir=cache_directory ,subdirs=subdirs, files=files_to_read)
 
-	ann = ad.AnnData()
+	layers = {}
 	for assay_name, files in itertools.groupby(synced, key=lambda x: x[0]):
-		ann.layers[assay_name] = ad.concat(files).X
-	ann.obs = data.fetchdf()
+		paths = (tup[1] for tup in files)
+		layers[assay_name] = ad.concat(ad.read_h5ad(path) for path in paths).X
+	ann = ad.AnnData(X=layers.pop("original"), layers=layers, obs=data.fetchdf())
+	return ann
 
 
 	# "outer" product of subdirectories and filenames

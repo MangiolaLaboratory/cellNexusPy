@@ -1,11 +1,5 @@
 # Curated Atlas Query (Python)
 
-
-```python
-# Convert to markdown using
-# poetry run jupyter nbconvert demo.ipynb --to markdown --output README
-```
-
 ## Importing the package
 
 

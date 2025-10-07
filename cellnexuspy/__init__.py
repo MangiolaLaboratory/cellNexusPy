@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 REMOTE_URL = "https://object-store.rc.nectar.org.au/v1/AUTH_06d6e008e3e642da99d806ba3ea629c5"
 ASSAY_URL = "{}/cellNexus-anndata".format(REMOTE_URL)
-METADATA_URL = "{}/cellNexus-metadata/metadata.1.0.11.parquet".format(REMOTE_URL)
+METADATA_URL = "{}/cellNexus-metadata/metadata.1.2.13.parquet".format(REMOTE_URL)
 MIN_EXPECTED_SIZE = 5000000
 
 assay_map = {"counts": "counts", "cpm": "cpm"}
@@ -51,6 +51,17 @@ def get_metadata(
     parquet_url: str = METADATA_URL,
     cache_dir: os.PathLike[str] = _get_default_cache_dir(),
 ) -> tuple[duckdb.DuckDBPyConnection, duckdb.DuckDBPyRelation]:
+    r""" Downloads a parquet file with the Human Cell Atlas metadata into a cache 
+    folder. This file is automatically imported into DuckDB for filtering and manipulation.
+
+    Args:
+        parquet_url (str): Provides the capability of using a customized URL for 
+                           local server parquet files.
+        cache_dir (str): Path to the folder to locate the parquet file.
+    """
+
+
+    
     parquet_local = Path(cache_dir) / parquet_url.split("/")[-1]
 
     if not parquet_local.exists() or not is_parquet_valid(parquet_local):
@@ -89,13 +100,13 @@ def filter_pseudobulk(file, data):
     ann = anndata[cell_ids.unique()].copy()
 
     columns_to_remove = ["cell_id", "cell_type", "file_id_cellNexus_single_cell",
-                     "cell_type_ontology_term_id",
-                     "observation_joinid", "ensemble_joinid",
-                     "nFeature_RNA", "data_driven_ensemble", "cell_type_unified",
-                     "empty_droplet", "observation_originalid", "alive", "scDblFinder.class"]
+                         "cell_type_ontology_term_id",
+                         "observation_joinid", "ensemble_joinid",
+                         "nFeature_expressed_in_sample", "nCount_RNA", "data_driven_ensemble", "cell_type_unified",
+                         "empty_droplet", "observation_originalid", "alive", "scDblFinder.class", "is_immune"]
     subdata = cells.drop(columns=[col for col in columns_to_remove if col in cells])
     pattern = '|'.join(re.escape(s) for s in ["metacell","azimuth","monaco","blueprint","subsets_","high_"])
-    
+
     # Find matching columns and drop them
     cols_to_drop = subdata.columns[subdata.columns.str.contains(pattern, case=False, regex=True)]
     subdata = subdata.drop(columns=cols_to_drop)
@@ -147,16 +158,27 @@ def get_anndata(
     assay: str = "counts",
     aggregation: str = "single_cell",
     cache_directory: Path = _get_default_cache_dir(),
-    repository: str = ASSAY_URL,
     features: Iterable = slice(None, None, None)
 ) -> ad.AnnData:
+    r""" Download and concatenate the .h5ad files with the gene expression and
+         the observational data in a single :obj:`AnnData` object.
+
+         Args:
+             data (duckdb): Metadata filtered with information of experiments of interest.
+             assay (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
+             aggregation (str): Type of cell aggregation to be used: `pseudobulk` or `metacell`.
+             cache_directory (str): Path to the folder to locate the parquet file.
+             features (Iterable): List of Ensembl ids to subset the :obj:`AnnData` object to the
+                                  specific genes of interest.
+    """
+    
     # error checking
     assert assay in (set(assay_map.keys()))
     assert isinstance(cache_directory, Path), "cache_directory must be a Path"
     
     cache_directory.mkdir(exist_ok=True, parents=True)
 
-    if aggregation == "metacell_2": data = data.filter(aggregation + " IS NOT NULL")
+    if aggregation != "single_cell" and aggregation != "pseudobulk": data = data.filter(aggregation + " IS NOT NULL")
     
     if aggregation == "pseudobulk":
         files_to_read = (
@@ -170,7 +192,7 @@ def get_anndata(
     atlas = data.project('"atlas_id"').distinct().fetchdf()["atlas_id"][0]                                                                                                                      
     
     synced = sync_assay_files(
-        url=repository, cache_dir=cache_directory, atlas=atlas, subdir=assay, aggregation=aggregation, files=files_to_read
+        url=ASSAY_URL, cache_dir=cache_directory, atlas=atlas, subdir=assay, aggregation=aggregation, files=files_to_read
     )
 
     if aggregation == "pseudobulk":

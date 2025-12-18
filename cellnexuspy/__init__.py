@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 REMOTE_URL = "https://object-store.rc.nectar.org.au/v1/AUTH_06d6e008e3e642da99d806ba3ea629c5"
 ASSAY_URL = "{}/cellNexus-anndata".format(REMOTE_URL)
-METADATA_URL = "{}/cellNexus-metadata/metadata.1.2.13.parquet".format(REMOTE_URL)
+METADATA_URL = "{}/cellNexus-metadata/metadata.1.3.0.parquet".format(REMOTE_URL)
 MIN_EXPECTED_SIZE = 5000000
 
 assay_map = {"counts": "counts", "cpm": "cpm"}
@@ -136,18 +136,7 @@ def filter_single_cell(file, data):
     anndata = ad.read_h5ad(file)
     anndata.obs.index = anndata.obs.index.astype(str)
     cell_ids = cells["cell_id"].astype(str)
-    pattern = '|'.join(re.escape(s) for s in cell_ids)
-    mask = anndata.obs.index.str.contains(pattern, regex=True)
-
-    anndata = anndata[mask].copy()
-
-    positions_per_cell = []
-        
-    for cid in cell_ids:
-        pos = np.where(anndata.obs.index.str.contains(cid))[0]
-        positions_per_cell.append(pos)
-
-    ann = anndata[np.concatenate(positions_per_cell).tolist(),:].copy()
+    ann = anndata[cell_ids]
     ann.obs = cells
     ann.obs.index = ann.obs["cell_id"]
 

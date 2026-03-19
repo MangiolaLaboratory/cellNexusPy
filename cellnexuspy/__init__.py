@@ -133,25 +133,17 @@ def filter_metacell(file, data):
 
 def filter_single_cell(file, data):
     cells = data.filter("file_id_cellNexus_single_cell ="  + "'"+str(file).split("/")[-1]+"'").fetchdf()
+    cells["cell_id"] = cells["cell_id"].astype(int).astype(str)
     anndata = ad.read_h5ad(file)
     anndata.obs.index = anndata.obs.index.astype(str)
-    cell_ids = cells["cell_id"].astype(str)
-    pattern = '|'.join(re.escape(s) for s in cell_ids)
-    mask = anndata.obs.index.str.contains(pattern, regex=True)
+    cells = cells[cells["cell_id"].isin(anndata.obs.index)]
+    cell_ids = cells["cell_id"].astype(int).astype(str)
 
-    anndata = anndata[mask].copy()
+    anndata = anndata[cell_ids].copy()
+    anndata.obs = cells
+    anndata.obs.index = anndata.obs["cell_id"]
 
-    positions_per_cell = []
-        
-    for cid in cell_ids:
-        pos = np.where(anndata.obs.index.str.contains(cid))[0]
-        positions_per_cell.append(pos)
-
-    ann = anndata[np.concatenate(positions_per_cell).tolist(),:].copy()
-    ann.obs = cells
-    ann.obs.index = ann.obs["cell_id"]
-
-    return ann
+    return anndata
     
 def _get_anndata(
     data: duckdb.DuckDBPyRelation,

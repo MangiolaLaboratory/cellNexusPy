@@ -153,7 +153,7 @@ def filter_single_cell(file, data):
 
     return ann
     
-def get_anndata(
+def _get_anndata(
     data: duckdb.DuckDBPyRelation,
     assay: str = "counts",
     aggregation: str = "single_cell",
@@ -208,3 +208,54 @@ def get_anndata(
     adatas = ad.concat(ads,index_unique="_")
     
     return adatas[:,features]
+
+def get_single_cell_experiment(
+    data: duckdb.DuckDBPyRelation,
+    assay: Literal["counts", "cpm"] = "counts",
+    cache_directory: Path = _get_default_cache_dir(),
+    features: Iterable = slice(None, None, None)
+):
+    r""" Main function to get the :obj:`AnnData` object with the single cell data and the metadata.
+
+    Args:
+        assay (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
+        cache_directory (str): Path to the folder to locate the parquet file.
+        features (Iterable): List of Ensembl ids to subset the :obj:`AnnData` object to the
+                             specific genes of interest.
+    """
+    return _get_anndata(data, assay=assay, aggregation="single_cell", cache_directory=_get_default_cache_dir(), features=features)
+
+def get_pseudobulk_experiment(
+    data: duckdb.DuckDBPyRelation,
+    assay: Literal["counts", "cpm"] = "counts",
+    cache_directory: Path = _get_default_cache_dir(),
+    features: Iterable = slice(None, None, None)
+):
+    r""" Main function to get the :obj:`AnnData` object with the pseudobulk data and the metadata.
+
+    Args:
+        assay (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
+        cache_directory (str): Path to the folder to locate the parquet file.
+        features (Iterable): List of Ensembl ids to subset the :obj:`AnnData` object to the
+                             specific genes of interest.
+    """
+    return _get_anndata(data, assay=assay, aggregation="pseudobulk", cache_directory=_get_default_cache_dir(), features=features)
+
+def get_metacell_experiment(
+    data: duckdb.DuckDBPyRelation,
+    aggregation: str = "metacell_2",
+    assay: Literal["counts", "cpm"] = "counts",
+    cache_directory: Path = _get_default_cache_dir(),
+    features: Iterable = slice(None, None, None)
+):
+    r""" Main function to get the :obj:`AnnData` object with the metacell data and the metadata.
+
+    Args:
+        assay (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
+        aggregation (str): Type of cell aggregation to be used: `pseudobulk` or `metacell`.
+        cache_directory (str): Path to the folder to locate the parquet file.
+        features (Iterable): List of Ensembl ids to subset the :obj:`AnnData` object to the
+                             specific genes of interest.
+    """
+    return _get_anndata(data, assay=assay, aggregation="metacell_2", cache_directory=_get_default_cache_dir(), features=features)
+

@@ -118,17 +118,21 @@ def filter_pseudobulk(file, data):
 
 def filter_metacell(file, data):
     df = data.filter("file_id_cellNexus_single_cell ="  + "'"+str(file).split("/")[-1]+"'").fetchdf()
-    df["file_id_cellNexus_metacell"] = df["sample_id"].astype(str) + "___" + df["metacell_2"].astype(int).astype(str)
-    df.index = df["file_id_cellNexus_metacell"]
-    filt_ad = ad.read_h5ad(file)[df["file_id_cellNexus_metacell"].unique()]
-    filt_ad.obs = df[["dataset_id", "sample_id", "assay", "assay_ontology_term_id", 
-     "development_stage", "development_stage_ontology_term_id", "disease", "disease_ontology_term_id", 
-     "donor_id", "experiment___", "explorer_url", "feature_count", "is_primary_data", 
-     "organism", "organism_ontology_term_id", "published_at", "raw_data_location", 
-     "revised_at", "sample_heuristic", "schema_version", "self_reported_ethnicity", 
-     "self_reported_ethnicity_ontology_term_id", "sex", "sex_ontology_term_id", "tissue", 
-     "tissue_ontology_term_id", "tissue_type", "title", "tombstone", "url", "age_days", 
-     "tissue_groups", "atlas_id", "sample_chunk", "file_id_cellNexus_single_cell","file_id_cellNexus_metacell"]].drop_duplicates()
+    df["file_id_cellNexus_metacell"] = df["file_id_cellNexus_single_cell"].astype(str)
+    filt_ad = ad.read_h5ad(file)
+    
+    #filt_ad.obs = filt_ad.obs.merge(data.select("sample_id","metacell_2","metacell_id").fetchdf(), filt_ad.obs, how=left)
+    columns = ["sample_id","metacell_2","metacell_id","dataset_id", "assay", "assay_ontology_term_id", 
+        "development_stage", "development_stage_ontology_term_id", "disease", "disease_ontology_term_id", 
+        "donor_id", "experiment___", "explorer_url", "feature_count", "is_primary_data", 
+        "organism", "organism_ontology_term_id", "published_at", "raw_data_location", 
+        "revised_at", "sample_heuristic", "schema_version", "self_reported_ethnicity", 
+        "self_reported_ethnicity_ontology_term_id", "sex", "sex_ontology_term_id", "tissue", 
+        "tissue_ontology_term_id", "tissue_type", "title", "tombstone", "url", "age_days", 
+        "tissue_groups", "atlas_id", "sample_chunk", "file_id_cellNexus_single_cell", 
+        "file_id_cellNexus_metacell", "dir_prefix"]
+    filt_ad.obs = filt_ad.obs[[c for c in columns if c in filt_ad.obs.columns]].drop_duplicates()
+
     return filt_ad
 
 def filter_single_cell(file, data):

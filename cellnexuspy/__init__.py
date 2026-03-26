@@ -17,7 +17,8 @@ from tqdm import tqdm
 
 REMOTE_URL = "https://object-store.rc.nectar.org.au/v1/AUTH_06d6e008e3e642da99d806ba3ea629c5"
 ASSAY_URL = "{}/cellNexus-anndata".format(REMOTE_URL)
-METADATA_URL = "{}/cellNexus-metadata/metadata.1.3.0.parquet".format(REMOTE_URL)
+METADATA_URL = "{}/cellNexus-metadata/metadata.2.0.0.parquet".format(REMOTE_URL)
+SAMPLE_DATABASE_URL = "{}/cellNexus-metadata/sample_metadata.2.0.0.parquet".format(REMOTE_URL)
 MIN_EXPECTED_SIZE = 5000000
 
 assay_map = {"counts": "counts", "cpm": "cpm"}
@@ -78,15 +79,15 @@ def sync_assay_files(
     cache_dir: Path = _get_default_cache_dir(),
     subdir: str = "",
     atlas: str = "",
-    aggregation: str = "",
+    cell_aggregation: str = "",
     files: Iterable[str] = [],
 ):
     for file in files:
-        if aggregation == "single_cell":
+        if cell_aggregation == "single_cell":
             sub_url = f"{url}/{atlas}/{subdir}/{file}"
         else:
-            sub_url = f"{url}/{atlas}/{aggregation}/{subdir}/{file}"
-        output_filepath = cache_dir / atlas / aggregation / subdir / file
+            sub_url = f"{url}/{atlas}/{cell_aggregation}/{subdir}/{file}"
+        output_filepath = cache_dir / atlas / cell_aggregation / subdir / file
 
         if not output_filepath.exists() or os.path.getsize(output_filepath) < MIN_EXPECTED_SIZE:
             _sync_remote_file(sub_url, output_filepath)
@@ -118,34 +119,41 @@ def filter_pseudobulk(file, data):
 
 def filter_metacell(file, data):
     df = data.filter("file_id_cellNexus_single_cell ="  + "'"+str(file).split("/")[-1]+"'").fetchdf()
-    df["file_id_cellNexus_metacell"] = df["sample_id"].astype(str) + "___" + df["metacell_2"].astype(int).astype(str)
-    df.index = df["file_id_cellNexus_metacell"]
-    filt_ad = ad.read_h5ad(file)[df["file_id_cellNexus_metacell"].unique()]
-    filt_ad.obs = df[["dataset_id", "sample_id", "assay", "assay_ontology_term_id", 
-     "development_stage", "development_stage_ontology_term_id", "disease", "disease_ontology_term_id", 
-     "donor_id", "experiment___", "explorer_url", "feature_count", "is_primary_data", 
-     "organism", "organism_ontology_term_id", "published_at", "raw_data_location", 
-     "revised_at", "sample_heuristic", "schema_version", "self_reported_ethnicity", 
-     "self_reported_ethnicity_ontology_term_id", "sex", "sex_ontology_term_id", "tissue", 
-     "tissue_ontology_term_id", "tissue_type", "title", "tombstone", "url", "age_days", 
-     "tissue_groups", "atlas_id", "sample_chunk", "file_id_cellNexus_single_cell","file_id_cellNexus_metacell"]].drop_duplicates()
+    df["file_id_cellNexus_metacell"] = df["file_id_cellNexus_single_cell"].astype(str)
+    filt_ad = ad.read_h5ad(file)
+    
+    columns = ["sample_id","metacell_2","metacell_id","dataset_id", "assay", "assay_ontology_term_id", 
+        "development_stage", "development_stage_ontology_term_id", "disease", "disease_ontology_term_id", 
+        "donor_id", "experiment___", "explorer_url", "feature_count", "is_primary_data", 
+        "organism", "organism_ontology_term_id", "published_at", "raw_data_location", 
+        "revised_at", "sample_heuristic", "schema_version", "self_reported_ethnicity", 
+        "self_reported_ethnicity_ontology_term_id", "sex", "sex_ontology_term_id", "tissue", 
+        "tissue_ontology_term_id", "tissue_type", "title", "tombstone", "url", "age_days", 
+        "tissue_groups", "atlas_id", "sample_chunk", "file_id_cellNexus_single_cell", 
+        "file_id_cellNexus_metacell", "dir_prefix"]
+    filt_ad.obs = filt_ad.obs[[c for c in columns if c in filt_ad.obs.columns]].drop_duplicates()
+
     return filt_ad
+
 
 def filter_single_cell(file, data):
     cells = data.filter("file_id_cellNexus_single_cell ="  + "'"+str(file).split("/")[-1]+"'").fetchdf()
+    cells["cell_id"] = cells["cell_id"].astype(int).astype(str)
     anndata = ad.read_h5ad(file)
     anndata.obs.index = anndata.obs.index.astype(str)
-    cell_ids = cells["cell_id"].astype(str)
-    ann = anndata[cell_ids]
-    ann.obs = cells
-    ann.obs.index = ann.obs["cell_id"]
+    cells = cells[cells["cell_id"].isin(anndata.obs.index)]
+    cell_ids = cells["cell_id"].astype(int).astype(str)
 
-    return ann
+    anndata = anndata[cell_ids].copy()
+    anndata.obs = cells
+    anndata.obs.index = anndata.obs["cell_id"]
+
+    return anndata
     
 def _get_anndata(
-    data: duckdb.DuckDBPyRelation,
-    assay: str = "counts",
-    aggregation: str = "single_cell",
+    data: duckdb.DuckDBPyRelation | pd.DataFrame,
+    assays: str = "counts",
+    cell_aggregation: str = "single_cell",
     cache_directory: Path = _get_default_cache_dir(),
     features: Iterable = slice(None, None, None)
 ) -> ad.AnnData:
@@ -153,23 +161,26 @@ def _get_anndata(
          the observational data in a single :obj:`AnnData` object.
 
          Args:
-             data (duckdb): Metadata filtered with information of experiments of interest.
-             assay (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
-             aggregation (str): Type of cell aggregation to be used: `pseudobulk` or `metacell`.
+             data (duckdb.DuckDBPyRelation | pd.DataFrame): Metadata filtered with information of experiments of interest.
+             assays (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
+             cell_aggregation (str): Type of cell aggregation to be used: `pseudobulk` or `metacell`.
              cache_directory (str): Path to the folder to locate the parquet file.
              features (Iterable): List of Ensembl ids to subset the :obj:`AnnData` object to the
                                   specific genes of interest.
     """
     
     # error checking
-    assert assay in (set(assay_map.keys()))
+    assert assays in (set(assay_map.keys()))
     assert isinstance(cache_directory, Path), "cache_directory must be a Path"
+    
+    if isinstance(data, pd.DataFrame):
+        data = duckdb.from_df(data)
     
     cache_directory.mkdir(exist_ok=True, parents=True)
 
-    if aggregation != "single_cell" and aggregation != "pseudobulk": data = data.filter(aggregation + " IS NOT NULL")
+    if cell_aggregation != "single_cell" and cell_aggregation != "pseudobulk": data = data.filter(cell_aggregation + " IS NOT NULL")
     
-    if aggregation == "pseudobulk":
+    if cell_aggregation == "pseudobulk":
         files_to_read = (
             data.project("file_id_cellNexus_pseudobulk").distinct().fetchdf()["file_id_cellNexus_pseudobulk"]
         )
@@ -181,13 +192,13 @@ def _get_anndata(
     atlas = data.project('"atlas_id"').distinct().fetchdf()["atlas_id"][0]                                                                                                                      
     
     synced = sync_assay_files(
-        url=ASSAY_URL, cache_dir=cache_directory, atlas=atlas, subdir=assay, aggregation=aggregation, files=files_to_read
+        url=ASSAY_URL, cache_dir=cache_directory, atlas=atlas, subdir=assays, cell_aggregation=cell_aggregation, files=files_to_read
     )
 
-    if aggregation == "pseudobulk":
+    if cell_aggregation == "pseudobulk":
         for _, files in itertools.groupby(synced, key=lambda x: x[0]):
             ads = [filter_pseudobulk(file[1], data) for file in files]
-    elif aggregation == "metacell_2":
+    elif cell_aggregation == "metacell_2":
         for _, files in itertools.groupby(synced, key=lambda x: x[0]):
             ads = [filter_metacell(file[1], data) for file in files]
     else:
@@ -199,52 +210,56 @@ def _get_anndata(
     return adatas[:,features]
 
 def get_single_cell_experiment(
-    data: duckdb.DuckDBPyRelation,
-    assay: Literal["counts", "cpm"] = "counts",
+    data: duckdb.DuckDBPyRelation | pd.DataFrame,
+    assays: Literal["counts", "cpm"] = "counts",
     cache_directory: Path = _get_default_cache_dir(),
     features: Iterable = slice(None, None, None)
 ):
     r""" Main function to get the :obj:`AnnData` object with the single cell data and the metadata.
 
     Args:
-        assay (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
+        data (duckdb.DuckDBPyRelation | pd.DataFrame): Metadata filtered with information of experiments of interest.
+        assays (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
         cache_directory (str): Path to the folder to locate the parquet file.
         features (Iterable): List of Ensembl ids to subset the :obj:`AnnData` object to the
                              specific genes of interest.
     """
-    return _get_anndata(data, assay=assay, aggregation="single_cell", cache_directory=_get_default_cache_dir(), features=features)
+    return _get_anndata(data, assays=assays, cell_aggregation="single_cell", cache_directory=_get_default_cache_dir(), features=features)
 
-def get_pseudobulk_experiment(
-    data: duckdb.DuckDBPyRelation,
-    assay: Literal["counts", "cpm"] = "counts",
+def get_pseudobulk(
+    data: duckdb.DuckDBPyRelation | pd.DataFrame,
+    assays: Literal["counts", "cpm"] = "counts",
     cache_directory: Path = _get_default_cache_dir(),
     features: Iterable = slice(None, None, None)
 ):
     r""" Main function to get the :obj:`AnnData` object with the pseudobulk data and the metadata.
 
     Args:
-        assay (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
+        data (duckdb.DuckDBPyRelation | pd.DataFrame): Metadata filtered with information of experiments of interest.
+        assays (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
         cache_directory (str): Path to the folder to locate the parquet file.
         features (Iterable): List of Ensembl ids to subset the :obj:`AnnData` object to the
                              specific genes of interest.
     """
-    return _get_anndata(data, assay=assay, aggregation="pseudobulk", cache_directory=_get_default_cache_dir(), features=features)
+    return _get_anndata(data, assays=assays, cell_aggregation="pseudobulk", cache_directory=_get_default_cache_dir(), features=features)
 
-def get_metacell_experiment(
+"""
+def get_metacell(
     data: duckdb.DuckDBPyRelation,
-    aggregation: str = "metacell_2",
-    assay: Literal["counts", "cpm"] = "counts",
+    cell_aggregation: str = "metacell_2",
+    assays: Literal["counts", "cpm"] = "counts",
     cache_directory: Path = _get_default_cache_dir(),
     features: Iterable = slice(None, None, None)
 ):
-    r""" Main function to get the :obj:`AnnData` object with the metacell data and the metadata.
+    r Main function to get the :obj:`AnnData` object with the metacell data and the metadata.
 
     Args:
-        assay (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
-        aggregation (str): Type of cell aggregation to be used: `pseudobulk` or `metacell`.
+        data (duckdb.DuckDBPyRelation | pd.DataFrame): Metadata filtered with information of experiments of interest.
+        assays (str): Type of gene expression data `counts` (raw) or `cpm` (normalized).
+        cell_aggregation (str): Type of cell aggregation to be used: `pseudobulk` or `metacell`.
         cache_directory (str): Path to the folder to locate the parquet file.
         features (Iterable): List of Ensembl ids to subset the :obj:`AnnData` object to the
                              specific genes of interest.
-    """
-    return _get_anndata(data, assay=assay, aggregation="metacell_2", cache_directory=_get_default_cache_dir(), features=features)
-
+    
+    return _get_anndata(data, assays=assays, cell_aggregation=cell_aggregation, cache_directory=cache_directory, features=features)
+"""

@@ -3,8 +3,29 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-03-26
 
-## [0.2.0] - YYYY-MM-DD
+### Added
+
+### Changed
+
+- parquet version updated
+- get_anndata splitted into get_single_cell_experiment and get_pseudobulk
+- Input data for anndata retreivers accepts also pd.DataFrame
+
+### Deprecated
+
+### Removed
+
+- get_metacell function
+
+### Fixed
+
+- nbconvert and notebook versions requirements
+
+### Security
+
+## [0.2.0] - 2026-01-30
 
 ### Added
 

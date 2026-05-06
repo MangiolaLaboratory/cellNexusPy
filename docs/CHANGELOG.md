@@ -3,6 +3,35 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-05-06
+
+### Added
+
+- sct normalization as additional option for parameter "assays"
+- Adding "get_anndata" and "get_pseudobulk" to "DuckDBPyRelation" to make one-line-code feasible
+- "get_metadata_url" function added
+- "get_cell_communication_strength" function added
+- "join_census_table" function added
+- "keep_quality_cells" function added
+- Examples of new function in "demo.ipynb"
+
+### Changed
+
+- New parquet file version: 2.2.1
+- License: From GPL-3 to Modified MIT (based on GPT-2 License)
+- Function name: From get_anndata to _anndata_constructor
+- Function name: From get_single_cell_experiment to get_anndata
+- Examples for get_anndata and get_pseudobulk in demo.ipynb
+- Error checking in _anndata_constructor function
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
 ## [0.3.0] - 2026-03-26
 
 ### Added

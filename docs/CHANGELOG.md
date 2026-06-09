@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-06-09
+
+### Added
+
+### Changed
+
+- New parquet file version: 2.3.0
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
 ## [0.4.0] - 2026-05-06
 
 ### Added

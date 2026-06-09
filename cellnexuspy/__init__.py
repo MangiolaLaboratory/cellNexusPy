@@ -17,10 +17,10 @@ from tqdm import tqdm
 
 REMOTE_URL = "https://object-store.rc.nectar.org.au/v1/AUTH_06d6e008e3e642da99d806ba3ea629c5"
 ASSAY_URL = "{}/cellNexus-anndata".format(REMOTE_URL)
-METADATA_URL = "{}/cellNexus-metadata/cellnexus_metadata.2.2.1.parquet".format(REMOTE_URL)
-SAMPLE_DATABASE_URL = "{}/cellNexus-metadata/cellnexus_sample_metadata.2.2.1.parquet".format(REMOTE_URL)
-CENSUS_METADATA_URL = "{}/cellNexus-metadata/census_cell_metadata.2.2.1.parquet".format(REMOTE_URL)
-CENSUS_SAMPLE_METADATA_URL = "{}/cellNexus-metadata/census_sample_metadata.2.2.1.parquet".format(REMOTE_URL)
+METADATA_URL = "{}/cellNexus-metadata/cellnexus_metadata.2.3.0.parquet".format(REMOTE_URL)
+SAMPLE_DATABASE_URL = "{}/cellNexus-metadata/cellnexus_sample_metadata.2.3.0.parquet".format(REMOTE_URL)
+CENSUS_METADATA_URL = "{}/cellNexus-metadata/census_cell_metadata.2.3.0.parquet".format(REMOTE_URL)
+CENSUS_SAMPLE_METADATA_URL = "{}/cellNexus-metadata/census_sample_metadata.2.3.0.parquet".format(REMOTE_URL)
 MIN_EXPECTED_SIZE = 5000000
 
 assay_map = {"counts": "counts", "cpm": "cpm", "sct": "sct"}

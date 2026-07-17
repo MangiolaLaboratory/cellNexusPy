@@ -1,10 +1,9 @@
 import itertools
 import os
-import re
 import shutil
 import sys
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Iterable, Literal, Sequence
 
 import anndata as ad
 import numpy as np
@@ -173,6 +172,105 @@ def keep_quality_cells(
     
     return table
 
+
+def _quote_ident(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def get_specific_annotation_columns(
+    data: duckdb.DuckDBPyRelation | pd.DataFrame,
+    col: str | Sequence[str],
+    sample_n: int | None = None,
+    include_query_columns: bool = True,
+) -> list[str]:
+    r"""Identify annotation columns functionally determined by key column(s).
+
+    A non-key column ``x`` is kept when
+    ``n_distinct(keys..., x) == n_distinct(keys...)``, i.e. ``x`` does not vary
+    within each key combination. Useful for keeping sample- or
+    pseudobulk-grain annotations and dropping cell-level columns.
+
+    Works on both pandas DataFrames and lazy DuckDB relations from
+    :func:`get_metadata` (DataFrames are wrapped in DuckDB).
+
+    Args:
+        data: A pandas DataFrame or DuckDB relation (e.g. from :func:`get_metadata`).
+        col: Key column name(s), e.g. ``"sample_id"`` or
+            ``["sample_id", "cell_type_unified_ensemble"]``.
+        sample_n: Optional positive integer. If set, randomly sample this many
+            rows before checking (DuckDB ``USING SAMPLE``). Faster but approximate.
+        include_query_columns: If ``True``, include the key columns in the result.
+            Default ``True``.
+
+    Returns:
+        Column names determined by ``col`` (optionally including the keys).
+
+    Example:
+        >>> conn, meta = get_metadata(parquet_url=SAMPLE_DATABASE_URL)
+        >>> get_specific_annotation_columns(meta, "sample_id", sample_n=5000)
+        >>> get_specific_annotation_columns(
+        ...     meta, ["sample_id", "cell_type_unified_ensemble"], sample_n=5000
+        ... )
+    """
+    keys = [col] if isinstance(col, str) else list(col)
+    rel = duckdb.from_df(data) if isinstance(data, pd.DataFrame) else data
+    if sample_n is not None:
+        rel = rel.query("_s", f"SELECT * FROM _s USING SAMPLE {int(sample_n)} ROWS")
+
+    key_sql = ", ".join(_quote_ident(k) for k in keys)
+    others = [c for c in rel.columns if c not in keys]
+    exprs = [f"count(DISTINCT ({key_sql})) AS n_key"] + [
+        f"count(DISTINCT ({key_sql}, {_quote_ident(c)})) AS col_{i}"
+        for i, c in enumerate(others)
+    ]
+    counts = rel.query("_t", f"SELECT {', '.join(exprs)} FROM _t").fetchone()
+
+    specific = [c for i, c in enumerate(others) if counts[i + 1] == counts[0]]
+    return (keys + specific) if include_query_columns else specific
+
+
+def keep_specific_annotation_columns(
+    data: duckdb.DuckDBPyRelation | pd.DataFrame,
+    col: str | Sequence[str],
+    sample_n: int | None = None,
+    include_query_columns: bool = True,
+) -> duckdb.DuckDBPyRelation | pd.DataFrame:
+    r"""Keep key columns and annotations functionally determined by them.
+
+    Selects ``col`` plus columns returned by :func:`get_specific_annotation_columns`.
+    Useful for reducing cell-level metadata to sample- or pseudobulk-grain
+    annotations before building ``obs``.
+
+    Args:
+        data: A pandas DataFrame or DuckDB relation (e.g. from :func:`get_metadata`).
+        col: Key column name(s), e.g. ``"sample_id"`` or
+            ``["sample_id", "cell_type_unified_ensemble"]``.
+        sample_n: Optional positive integer. If set, randomly sample this many
+            rows when detecting which columns to keep (faster but approximate).
+        include_query_columns: If ``True``, include the key columns in the result.
+
+    Returns:
+        ``data`` with only the key columns and columns functionally determined
+        by them (distinct rows).
+
+    Example:
+        >>> conn, meta = get_metadata(parquet_url=SAMPLE_DATABASE_URL)
+        >>> keep_specific_annotation_columns(
+        ...     meta, ["sample_id", "cell_type_unified_ensemble"]
+        ... )
+    """
+    cols = get_specific_annotation_columns(
+        data,
+        col,
+        sample_n=sample_n,
+        include_query_columns=include_query_columns,
+    )
+    if isinstance(data, pd.DataFrame):
+        return data.loc[:, cols].drop_duplicates()
+    projected = ", ".join(_quote_ident(c) for c in cols)
+    return data.project(projected).distinct()
+
+
 def sync_assay_files(
     url: str = ASSAY_URL,
     cache_dir: Path = _get_default_cache_dir(),
@@ -199,19 +297,20 @@ def filter_pseudobulk(file, data):
     anndata = ad.read_h5ad(file)
     ann = anndata[cell_ids.unique()].copy()
 
-    columns_to_remove = ["cell_id", "cell_type", "file_id_cellNexus_single_cell",
-                         "cell_type_ontology_term_id",
-                         "observation_joinid", "ensemble_joinid",
-                         "nFeature_expressed_in_sample", "nCount_RNA", "data_driven_ensemble", "cell_type_unified",
-                         "empty_droplet", "observation_originalid", "alive", "scDblFinder.class", "is_immune"]
-    subdata = cells.drop(columns=[col for col in columns_to_remove if col in cells])
-    pattern = '|'.join(re.escape(s) for s in ["metacell","azimuth","monaco","blueprint","subsets_","high_"])
-
-    # Find matching columns and drop them
-    cols_to_drop = subdata.columns[subdata.columns.str.contains(pattern, case=False, regex=True)]
-    subdata = subdata.drop(columns=cols_to_drop)
-    subdata = subdata.drop_duplicates(subset=["sample_id", "cell_type_unified_ensemble"], keep='last')
-    subdata.index = subdata["sample_id"]+"___"+subdata["cell_type_unified_ensemble"]
+    # Keep columns functionally determined by the pseudobulk grain
+    # (sample_id × cell_type_unified_ensemble), including user-added annotations.
+    # Cell-level columns are dropped because they vary within that grain.
+    subdata = keep_specific_annotation_columns(
+        cells,
+        ["sample_id", "cell_type_unified_ensemble"],
+        sample_n=100_000,
+    )
+    subdata = subdata.copy()
+    subdata.index = (
+        subdata["sample_id"].astype(str)
+        + "___"
+        + subdata["cell_type_unified_ensemble"].astype(str)
+    )
 
     ann.obs = subdata.reindex(ann.obs.index)
     return ann
@@ -337,6 +436,11 @@ def get_pseudobulk(
     features: Iterable = slice(None, None, None)
 ):
     r""" Main function to get the :obj:`AnnData` object with the pseudobulk data and the metadata.
+
+    Columns in ``data`` that are constant within each
+    ``sample_id`` × ``cell_type_unified_ensemble`` combination (including
+    user-added annotations) are retained in ``obs``. Cell-level columns are
+    dropped via :func:`keep_specific_annotation_columns`.
 
     Args:
         data (duckdb.DuckDBPyRelation | pd.DataFrame): Metadata filtered with information of experiments of interest.

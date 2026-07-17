@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.1] - 2026-07-17
+
+### Added
+
+- `get_specific_annotation_columns()` and `keep_specific_annotation_columns()` to identify and keep columns functionally determined by selected key column(s). Works on local data frames and lazy DuckDB tables from `get_metadata()`.
+- `get_pseudobulk()` now retains metadata columns that are constant within each `sample_id` × `cell_type_unified_ensemble` combination, including user-added annotations, when building `obs`. Cell-level columns are dropped.
+
+### Fixed
+
+- `get_pseudobulk()` now computes the retained `obs` columns once on the full query and reuses that set for every file, so concatenated `obs` share an identical schema. Previously per-file detection could disagree across files.
+
 ## [0.5.0] - 2026-06-09
 
 ### Added

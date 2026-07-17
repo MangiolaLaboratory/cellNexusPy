@@ -95,6 +95,26 @@ def test_keep_specific_annotation_columns_preserves_sample_grain_user_columns():
     assert "cell_id" not in coldata_like.columns
 
 
+def test_get_specific_annotation_columns_supports_metacell_grain_keys():
+    # Metacell grain is sample_id x metacell_* (same once-per-query selection pattern)
+    df = pd.DataFrame(
+        {
+            "sample_id": ["s1"] * 4 + ["s2"] * 4,
+            "metacell_2": ["m1", "m1", "m2", "m2"] * 2,
+            "batch": ["b1", "b1", "b1", "b1", "b2", "b2", "b2", "b2"],
+            "metacell_score": [1, 1, 2, 2, 3, 3, 4, 4],
+            "cell_id": [f"c{i}" for i in range(1, 9)],
+        }
+    )
+    cols = get_specific_annotation_columns(
+        df, ["sample_id", "metacell_2"], include_query_columns=True
+    )
+    assert all(
+        c in cols for c in ["sample_id", "metacell_2", "batch", "metacell_score"]
+    )
+    assert "cell_id" not in cols
+
+
 def test_get_pseudobulk_preserves_sample_grain_user_columns():
     _, meta = get_metadata(parquet_url=SAMPLE_DATABASE_URL)
     file_id = (
@@ -112,3 +132,27 @@ def test_get_pseudobulk_preserves_sample_grain_user_columns():
     )
     adata = get_pseudobulk(df)
     assert "my_sample_annotation" in adata.obs.columns
+
+
+def test_get_pseudobulk_consistent_obs_schema_across_files():
+    # Regression: the kept-column set is computed once on the full query so
+    # every per-file AnnData shares an identical obs schema before concat.
+    _, meta = get_metadata(parquet_url=SAMPLE_DATABASE_URL)
+    file_ids = (
+        keep_quality_cells(meta)
+        .project("file_id_cellNexus_pseudobulk")
+        .distinct()
+        .limit(3)
+        .fetchdf()["file_id_cellNexus_pseudobulk"]
+        .tolist()
+    )
+    quoted = ", ".join(f"'{f}'" for f in file_ids)
+    df = (
+        keep_quality_cells(meta)
+        .filter(f"file_id_cellNexus_pseudobulk IN ({quoted})")
+        .fetchdf()
+        .assign(my_sample_annotation=lambda x: "ann_" + x["sample_id"].astype(str))
+    )
+    adata = get_pseudobulk(df)
+    assert "my_sample_annotation" in adata.obs.columns
+    assert adata.obs["my_sample_annotation"].notna().all()

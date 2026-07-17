@@ -291,21 +291,21 @@ def sync_assay_files(
 
         yield subdir, output_filepath
         
-def filter_pseudobulk(file, data):
+def filter_pseudobulk(file, data, coldata_columns):
     cells = data.filter("file_id_cellNexus_pseudobulk ="  + "'"+str(file).split("/")[-1]+"'").fetchdf()
     cell_ids = cells["sample_id"].astype(str) + "___" + cells["cell_type_unified_ensemble"].astype(str)
     anndata = ad.read_h5ad(file)
     ann = anndata[cell_ids.unique()].copy()
 
-    # Keep columns functionally determined by the pseudobulk grain
-    # (sample_id × cell_type_unified_ensemble), including user-added annotations.
-    # Cell-level columns are dropped because they vary within that grain.
-    subdata = keep_specific_annotation_columns(
-        cells,
-        ["sample_id", "cell_type_unified_ensemble"],
-        sample_n=100_000,
-    )
-    subdata = subdata.copy()
+    # Use the precomputed column set from the full query (identical for every
+    # file) so concatenated obs share one schema. Per-file FD detection can
+    # disagree across files and break concatenation.
+    if coldata_columns is None:
+        raise ValueError(
+            "Internal error: `coldata_columns` is required for pseudobulk. "
+            "Compute it once via `get_specific_annotation_columns` before fetching."
+        )
+    subdata = cells.loc[:, coldata_columns].drop_duplicates().copy()
     subdata.index = (
         subdata["sample_id"].astype(str)
         + "___"
@@ -368,9 +368,19 @@ def _anndata_constructor(
 
     if cell_aggregation != "single_cell" and cell_aggregation != "pseudobulk": data = data.filter(cell_aggregation + " IS NOT NULL")
     
+    pseudobulk_coldata_columns = None
     if cell_aggregation == "pseudobulk":
         files_to_read = (
             data.project("file_id_cellNexus_pseudobulk").distinct().fetchdf()["file_id_cellNexus_pseudobulk"]
+        )
+        # Compute once on the full query so every file-level AnnData shares
+        # identical obs columns before concatenation; per-file detection can
+        # disagree.
+        pseudobulk_coldata_columns = get_specific_annotation_columns(
+            data,
+            ["sample_id", "cell_type_unified_ensemble"],
+            sample_n=100_000,
+            include_query_columns=True,
         )
     else:
         files_to_read = (
@@ -387,7 +397,7 @@ def _anndata_constructor(
 
         if cell_aggregation == "pseudobulk":
             for _, files in itertools.groupby(synced, key=lambda x: x[0]):
-                ads = [filter_pseudobulk(file[1], data) for file in files]
+                ads = [filter_pseudobulk(file[1], data, pseudobulk_coldata_columns) for file in files]
         elif cell_aggregation == "metacell_2":
             for _, files in itertools.groupby(synced, key=lambda x: x[0]):
                 ads = [filter_metacell(file[1], data) for file in files]

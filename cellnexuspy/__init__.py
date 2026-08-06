@@ -301,7 +301,6 @@ def _anndata_constructor(
         if result is None:
             result = concatenated
             result.layers[assay] = result.X.copy()
-            result.X = None
         else:
             result.layers[assay] = concatenated[result.obs_names, :].X.copy()
 

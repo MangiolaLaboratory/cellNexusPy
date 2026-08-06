@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import anndata as ad
 import numpy as np
 import pandas as pd
@@ -13,13 +15,16 @@ def test_main_assay_is_stored_in_x(monkeypatch, tmp_path):
         }
     )
     counts = np.array([[1, 2]], dtype=float)
+    cpm = np.array([[3, 4]], dtype=float)
 
     def fake_sync_assay_files(**kwargs):
-        yield "counts", tmp_path / "file.h5ad"
+        assay = kwargs["subdir"]
+        yield assay, tmp_path / f"{assay}.h5ad"
 
     def fake_filter_single_cell(file, data):
+        matrix = {"counts": counts, "cpm": cpm}[Path(file).stem]
         return ad.AnnData(
-            X=counts.copy(),
+            X=matrix.copy(),
             obs=pd.DataFrame(index=["cell"]),
             var=pd.DataFrame(index=["gene1", "gene2"]),
         )
@@ -28,8 +33,9 @@ def test_main_assay_is_stored_in_x(monkeypatch, tmp_path):
     monkeypatch.setattr(cellnexuspy, "filter_single_cell", fake_filter_single_cell)
 
     result = cellnexuspy._anndata_constructor(
-        metadata, assays="counts", cache_directory=tmp_path
+        metadata, assays=["counts", "cpm"], cache_directory=tmp_path
     )
 
     np.testing.assert_array_equal(result.X, counts)
     np.testing.assert_array_equal(result.layers["counts"], counts)
+    np.testing.assert_array_equal(result.layers["cpm"], cpm)

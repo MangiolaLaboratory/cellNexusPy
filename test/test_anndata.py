@@ -16,15 +16,17 @@ def test_main_assay_is_stored_in_x(monkeypatch, tmp_path):
     )
     counts = np.array([[1, 2]], dtype=float)
     cpm = np.array([[3, 4]], dtype=float)
+    assay_by_file = {}
 
     def fake_sync_assay_files(**kwargs):
         assay = kwargs["subdir"]
         file = tmp_path / f"{assay}.h5ad"
         file.touch()
+        assay_by_file[file] = assay
         yield assay, file
 
     def fake_filter_single_cell(file, data):
-        matrix = {"counts": counts, "cpm": cpm}[Path(file).stem]
+        matrix = {"counts": counts, "cpm": cpm}[assay_by_file[Path(file)]]
         return ad.AnnData(
             X=matrix.copy(),
             obs=pd.DataFrame(index=["cell"]),

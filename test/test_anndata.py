@@ -19,7 +19,9 @@ def test_main_assay_is_stored_in_x(monkeypatch, tmp_path):
 
     def fake_sync_assay_files(**kwargs):
         assay = kwargs["subdir"]
-        yield assay, tmp_path / f"{assay}.h5ad"
+        file = tmp_path / f"{assay}.h5ad"
+        file.touch()
+        yield assay, file
 
     def fake_filter_single_cell(file, data):
         matrix = {"counts": counts, "cpm": cpm}[Path(file).stem]

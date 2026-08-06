@@ -14,8 +14,8 @@ def test_main_assay_is_stored_in_x(monkeypatch, tmp_path):
     )
     counts = np.array([[1, 2]], dtype=float)
 
-    def fake_sync_assay_files(*, subdir, **kwargs):
-        yield subdir, tmp_path / "file.h5ad"
+    def fake_sync_assay_files(**kwargs):
+        yield "counts", tmp_path / "file.h5ad"
 
     def fake_filter_single_cell(file, data):
         return ad.AnnData(

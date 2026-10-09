@@ -3,6 +3,43 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-10-09
+
+### Added
+
+- "get_census_metadata" function to retrieve cell metadata from CZ CELLxGENE Census (default version "2024-07-01"), to be joined to the metadata via "dataset_id" and "observation_joinid"
+- "get_specific_annotation_columns" function to identify annotation columns determined by key column(s)
+- "hca_2024" and "hca_2025" aliases in "get_metadata_url"
+- "nfeature_col" and "min_features" parameters in "keep_quality_cells" (cells with fewer than 5000 features are removed by default)
+- Warnings when experiments are dropped for missing requested features, or when genes do not completely overlap across experiments
+- "cellxgene_census" dependency
+
+### Changed
+
+- New parquet file version: 2.4.0
+- Parameter name: From "parquet_url" to "cloud_metadata" in "get_metadata" and "get_cell_communication_strength"
+- "get_metadata" downloads "hca_2024" by default
+- "get_pseudobulk" applies "keep_quality_cells" automatically, as pseudobulk counts are computed from quality-controlled cells only
+- Pseudobulk metadata columns are computed once on the full query with "get_specific_annotation_columns", so all files share the same columns
+- Pseudobulk observation names are kept as "sample_id___cell_type_unified_ensemble", without suffixes
+- When "features" are provided, experiments missing any of them are dropped and genes follow the requested order; otherwise, genes are intersected across experiments
+- "get_anndata" and "get_pseudobulk" return an AnnData object instead of a view
+- Examples updated in "demo.ipynb"
+
+### Deprecated
+
+### Removed
+
+- "join_census_table" function (replaced by "get_census_metadata")
+- "METADATA_URL", "SAMPLE_DATABASE_URL" and "CENSUS_SAMPLE_METADATA_URL" constants
+
+### Fixed
+
+- Pseudobulk results now match cellNexus R ("get_pseudobulk")
+- Additional assays are aligned to the same genes as the first assay
+
+### Security
+
 ## [0.5.0] - 2026-06-09
 
 ### Added

@@ -1,6 +1,6 @@
 [project]
 name = "cellnexuspy"
-version = "0.5.0"
+version = "0.6.0"
 description = "Provides access to a copy of the Human Cell Atlas, but with harmonised metdata. This allows for uniform querying across numerous datasets within the Atlas using common fields such as cell type, tissue type, and patient ethnicity. Usage involves first querying the metadata table for cells of interest, and then downloading the corresponding cells into a anndata object."
 authors = [
     {name = "Stefano Mangiola", email = "stefano.mangiola@adelaide.edu.au"}
@@ -20,6 +20,9 @@ dependencies = [
     "duckdb (>=1.2.2,<2.0.0)",
     "nbconvert (>=7.12.0,<8.0.0)",
     "notebook (>=6.5.6,<8.0.0)",
+    "cellxgene-census (>=1.18.0,<2.0.0)",
+    "scipy (>=1.10)",
+    "numpy (>=1.24)",
 ]
 
 [tool.poetry]
